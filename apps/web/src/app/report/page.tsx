@@ -147,7 +147,7 @@ export default function ReportPage() {
           href="/"
           className="font-mono text-xs uppercase tracking-widest text-ink/50 hover:text-ink"
         >
-          CampusPluse
+          CampusPlus
         </Link>
         <h1 className="mt-2 text-3xl font-bold tracking-tight">
           What&rsquo;s the problem?

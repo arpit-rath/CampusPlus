@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Ask CampusPluse — natural-language querying over the complaint corpus.
+ * Ask CampusPlus — natural-language querying over the complaint corpus.
  *
  * Two deliberate UI choices, both about trust:
  *
@@ -24,7 +24,7 @@ const EXAMPLES = [
   "What wifi complaints are still open?",
 ];
 
-export function AskCampusPluse({ complaints }: { complaints: Complaint[] }) {
+export function AskCampusPlus({ complaints }: { complaints: Complaint[] }) {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState<AskAnswer | null>(null);
   const [asking, setAsking] = useState(false);
@@ -55,7 +55,7 @@ export function AskCampusPluse({ complaints }: { complaints: Complaint[] }) {
   return (
     <section className="flex h-full flex-col rounded-xl border border-ink/10 bg-white p-4">
       <h2 className="text-sm font-semibold uppercase tracking-wide text-ink">
-        Ask CampusPluse
+        Ask CampusPlus
       </h2>
       <p className="mt-0.5 text-xs text-ink/50">
         Answered only from real complaint records — never from a model&rsquo;s

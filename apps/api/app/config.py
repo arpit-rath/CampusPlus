@@ -25,7 +25,7 @@ API_ROOT = Path(__file__).resolve().parents[1]
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    database_url: str = "postgresql+asyncpg://campuspulse:campuspulse@localhost:5432/campuspulse"
+    database_url: str = "postgresql+asyncpg://campusplus:campusplus@localhost:5432/campusplus"
 
     # --- AI provider ---------------------------------------------------
     llm_provider: str = "mock"  # "mock" | "gemini" (openai/claude stubbed)

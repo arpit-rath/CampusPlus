@@ -3,15 +3,15 @@ services:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
-      POSTGRES_USER: campuspulse
-      POSTGRES_PASSWORD: campuspulse
-      POSTGRES_DB: campuspulse
+      POSTGRES_USER: campusplus
+      POSTGRES_PASSWORD: campusplus
+      POSTGRES_DB: campusplus
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U campuspulse"]
+      test: ["CMD-SHELL", "pg_isready -U campusplus"]
       interval: 5s
       timeout: 5s
       retries: 10

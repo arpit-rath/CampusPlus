@@ -1,4 +1,4 @@
-# CampusPluse — Hackathon Build Plan
+# CampusPlus — Hackathon Build Plan
 
 Designed version with diagrams and a visual timeline:
 https://claude.ai/code/artifact/8d2a706b-f264-41aa-9b11-3f76a6e462a4
@@ -11,7 +11,7 @@ provider (free tier) behind a swappable `AIProvider` interface
 ## 1. The thesis
 
 Routing-only complaint apps already exist as hackathon projects (e.g.
-"Campus Solver" from VIT Bhopal, "Campus AI"). CampusPluse's differentiator
+"Campus Solver" from VIT Bhopal, "Campus AI"). CampusPlus's differentiator
 has to be the parts most teams skip: similar-complaint detection,
 recurring-problem detection, and an explainable smart-priority score. The
 signature demo moment: submit 3 similar complaints from different tabs live
@@ -56,12 +56,12 @@ SDK directly.
 ## 6. Realtime & admin dashboard
 
 Location heatmap, recurring-issue leaderboard, explainable priority bar,
-and an "Ask CampusPluse" natural-language query box over the admin data.
+and an "Ask CampusPlus" natural-language query box over the admin data.
 
 ## 7. Spectacle features
 
 Live merge-in-front-of-you (core), explainable priority breakdown (core),
-photo-verification badge, Ask CampusPluse, auto-generated weekly digest, a
+photo-verification badge, Ask CampusPlus, auto-generated weekly digest, a
 "chaos button" that streams synthetic complaints for a dramatic live demo
 moment.
 
@@ -83,7 +83,7 @@ button and NL query; keep the live-merge moment and the priority bar.
 ## 9. Repo structure
 
 ```
-campuspulse/
+campusplus/
 ├─ apps/web/                apps/api/
 │                            ├─ app/ai/         (provider.py, gemini.py, mock.py, schemas.py)
 │                            ├─ app/pipeline/    (understand.py, cluster.py, priority.py)

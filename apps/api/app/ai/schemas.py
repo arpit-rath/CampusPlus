@@ -219,7 +219,7 @@ def parse_understanding(
     )
 
 
-# --- "Ask CampusPluse" answer schema -----------------------------------
+# --- "Ask CampusPlus" answer schema -----------------------------------
 #
 # Phase 11 of the implementation plan: the model never writes SQL and never
 # invents complaint ids. It is handed a pre-filtered, pre-fetched set of

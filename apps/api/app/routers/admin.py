@@ -1,4 +1,4 @@
-"""Admin endpoints: Ask CampusPluse, routing overrides, merge review, digest.
+"""Admin endpoints: Ask CampusPlus, routing overrides, merge review, digest.
 
 Every route here sits behind `require_admin` (a no-op only when ADMIN_TOKEN
 is unset — see `app/deps.py`), because each one either exposes the whole
@@ -28,7 +28,7 @@ from app.routers.complaints import ComplaintRead, _LOAD_OPTS, _get_complaint_or_
 router = APIRouter(dependencies=[Depends(require_admin)])
 
 
-# --- Ask CampusPluse ----------------------------------------------------
+# --- Ask CampusPlus ----------------------------------------------------
 
 
 class AskRequest(BaseModel):

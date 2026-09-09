@@ -35,7 +35,7 @@ import { categoryLabel, CATEGORY_SLUGS } from "@/lib/campus";
 import { PriorityBar } from "@/components/PriorityBar";
 import { LiveIndicator, type ConnectionStatus } from "@/components/LiveIndicator";
 import { RecurringLeaderboard } from "./RecurringLeaderboard";
-import { AskCampusPluse } from "./AskCampusPluse";
+import { AskCampusPlus } from "./AskCampusPlus";
 import { LocationHeatmap } from "./LocationHeatmap";
 import { SuggestedMerges } from "./SuggestedMerges";
 import { ComplaintTable } from "./ComplaintTable";
@@ -158,7 +158,7 @@ export default function DashboardPage() {
             href="/"
             className="font-mono text-xs uppercase tracking-widest text-ink/50 hover:text-ink"
           >
-            CampusPluse
+            CampusPlus
           </Link>
           <h1 className="mt-1 text-2xl font-bold tracking-tight">Command center</h1>
         </div>
@@ -202,7 +202,7 @@ export default function DashboardPage() {
         <div className="lg:col-span-2">
           <RecurringLeaderboard clusters={clusters} loading={loading} />
         </div>
-        <AskCampusPluse complaints={complaints} />
+        <AskCampusPlus complaints={complaints} />
       </div>
 
       {merges.length > 0 && (

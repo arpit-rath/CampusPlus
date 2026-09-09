@@ -267,7 +267,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         href="/"
         className="font-mono text-xs uppercase tracking-widest text-ink/50 hover:text-ink"
       >
-        CampusPluse
+        CampusPlus
       </Link>
       {children}
     </main>

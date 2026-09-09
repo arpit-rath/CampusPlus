@@ -34,13 +34,13 @@ export default function Home() {
     <main className="mx-auto flex min-h-screen max-w-4xl flex-col justify-center gap-12 px-6 py-16">
       <section>
         <p className="font-mono text-xs uppercase tracking-[0.2em] text-ink/50">
-          CampusPluse
+          CampusPlus
         </p>
         <h1 className="mt-3 max-w-2xl text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
           The intelligence layer, not the form, is the product.
         </h1>
         <p className="mt-4 max-w-xl text-lg text-ink/70">
-          Students report campus problems. CampusPluse works out which reports
+          Students report campus problems. CampusPlus works out which reports
           are the <em>same</em> problem, which problems keep coming back, and
           which ones actually deserve attention first — and explains every one
           of those decisions.

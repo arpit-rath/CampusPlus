@@ -1,4 +1,4 @@
-# CampusPluse
+# CampusPlus
 
 AI-powered campus problem intelligence. Students report campus issues with a
 description, photo and location; the system works out which reports are the

@@ -214,7 +214,7 @@ async def list_complaints(
     """Priority-sorted complaint list, with the filters the dashboard needs.
 
     Filtering happens in SQL rather than in the browser so the dashboard
-    stays responsive as the table grows, and so "Ask CampusPluse" and the
+    stays responsive as the table grows, and so "Ask CampusPlus" and the
     dashboard agree on what a filter means.
     """
     stmt = select(Complaint).options(*_LOAD_OPTS)

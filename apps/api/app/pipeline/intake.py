@@ -2,7 +2,7 @@
 
 This is the module the whole product is about. `app/routers/complaints.py`
 is a thin HTTP wrapper over `ingest_complaint`; everything that makes
-CampusPluse more than a ticket form happens here, in one readable sequence:
+CampusPlus more than a ticket form happens here, in one readable sequence:
 
     understand (multimodal)
       -> embed the normalized summary

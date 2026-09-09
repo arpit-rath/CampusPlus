@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate realistic demo/test complaint data for CampusPluse.
+"""Generate realistic demo/test complaint data for CampusPlus.
 
 Standalone script — writes a JSON fixture file, does not hit a running API
 (per the task's own guidance: JSON output is fine and safer than a live

@@ -35,7 +35,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # Kept out of the repo tree entirely so a stray `git add .` can never commit a
 # database cluster. `.gitignore` also covers pgdata/ for the docker path.
 DATA_DIR = REPO_ROOT / ".devdb"
-DB_NAME = "campuspulse"
+DB_NAME = "campusplus"
 
 
 def _pgserver():

@@ -276,7 +276,7 @@ async def test_suggested_merge_band_is_recorded_not_applied(clean_db):
         settings.suggested_merge_threshold = 0.75
 
 
-async def test_ask_campuspluse_answers_are_grounded_in_real_rows(clean_db):
+async def test_ask_campusplus_answers_are_grounded_in_real_rows(clean_db):
     db = clean_db
     await _submit(db, LEAK_A, "student_a")
     await _submit(db, LEAK_B, "student_b")
@@ -297,7 +297,7 @@ async def test_ask_campuspluse_answers_are_grounded_in_real_rows(clean_db):
         assert cited in real_ids, "a cited id must belong to a complaint that exists"
 
 
-async def test_ask_campuspluse_relaxes_an_over_narrow_question_and_says_so(clean_db):
+async def test_ask_campusplus_relaxes_an_over_narrow_question_and_says_so(clean_db):
     """An over-narrow question widens rather than dead-ending — and admits it.
 
     Asking for academics complaints when only a sanitation one exists used to
@@ -318,7 +318,7 @@ async def test_ask_campuspluse_relaxes_an_over_narrow_question_and_says_so(clean
     assert "relaxed" in result["filters"].lower()
 
 
-async def test_ask_campuspluse_still_returns_nothing_when_there_is_nothing(clean_db):
+async def test_ask_campusplus_still_returns_nothing_when_there_is_nothing(clean_db):
     """Relaxation widens filters; it never invents data."""
     db = clean_db
     result = await answer_admin_question(

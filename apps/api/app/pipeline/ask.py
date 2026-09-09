@@ -1,4 +1,4 @@
-"""Ask CampusPluse — natural-language querying over admin complaint data.
+"""Ask CampusPlus — natural-language querying over admin complaint data.
 
 Implementation-plan phase 11 is emphatic that the model must never execute
 arbitrary SQL, and that answers must be grounded in real rows. The design

@@ -1,4 +1,4 @@
-# CLAUDE.md — CampusPluse
+# CLAUDE.md — CampusPlus
 
 Read this before working anywhere in the repo. It is the shared contract
 every session builds against, so nobody re-derives the schema or invents a
@@ -6,7 +6,7 @@ conflicting API shape.
 
 ## What this is
 
-CampusPluse — AI-powered campus problem intelligence. Students report campus
+CampusPlus — AI-powered campus problem intelligence. Students report campus
 issues (WiFi, electrical, sanitation, infrastructure, academics) with a
 description, an optional photo, and a location. The system categorizes them,
 scores priority, detects duplicates and recurring problems via embeddings,
@@ -202,7 +202,7 @@ app callers pass the configured values in. Don't scatter magic numbers.
 - Uploads are validated by **magic bytes**, not the declared mime type, and
   the stored filename is always generated — there is no client-controlled
   path component.
-- "Ask CampusPluse" never lets a model write SQL. A question is reduced to a
+- "Ask CampusPlus" never lets a model write SQL. A question is reduced to a
   closed set of typed filters; cited ids are intersected with the ids we
   actually fetched, so a hallucinated id cannot reach the client.
 

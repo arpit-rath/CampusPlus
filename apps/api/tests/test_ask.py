@@ -1,4 +1,4 @@
-"""Tests for the "Ask CampusPluse" query layer.
+"""Tests for the "Ask CampusPlus" query layer.
 
 The security-relevant half of this feature is `extract_filters`: it is what
 guarantees the model never influences a query. These tests are all about

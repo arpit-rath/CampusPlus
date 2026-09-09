@@ -11,8 +11,8 @@
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
-const ADMIN_TOKEN_STORAGE_KEY = "campuspluse.adminToken";
-const STUDENT_ID_STORAGE_KEY = "campuspluse.studentId";
+const ADMIN_TOKEN_STORAGE_KEY = "campusplus.adminToken";
+const STUDENT_ID_STORAGE_KEY = "campusplus.studentId";
 
 export class ApiError extends Error {
   constructor(

@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 app = FastAPI(
-    title="CampusPluse API",
+    title="CampusPlus API",
     version="1.0.0",
     description=(
         "AI-powered campus problem intelligence. Every database write and "
