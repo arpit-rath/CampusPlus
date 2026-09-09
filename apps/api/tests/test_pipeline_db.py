@@ -355,3 +355,53 @@ async def test_resolving_a_complaint_keeps_the_cluster_consistent(clean_db):
     # than left as a stale increment.
     assert reloaded.member_count == 3
     assert reloaded.independent_student_count == 3
+
+
+async def test_embeddings_from_different_providers_never_match(clean_db):
+    """A mock vector and a Gemini vector must never be compared.
+
+    They occupy different spaces, so cosine similarity between them is noise,
+    not a low score. `FallbackProvider` exists to degrade a failed Gemini call
+    to the mock mid-request, so a single transient 503 during a live demo
+    would otherwise leave one complaint that can never merge with its own
+    duplicates — and clustering would look broken for an invisible reason.
+
+    Simulated by writing the same text under two provider tags and checking
+    the search only ever returns its own space.
+    """
+    from app.db.models import ComplaintEmbedding
+
+    db = clean_db
+    first = await _submit(db, LEAK_A, "student_a")
+
+    # Relabel the stored embedding as if Gemini had produced it.
+    row = (
+        await db.execute(
+            select(ComplaintEmbedding).where(
+                ComplaintEmbedding.complaint_id == first.complaint.id
+            )
+        )
+    ).scalar_one()
+    assert row.provider == "mock", "the mock provider must tag its own vectors"
+    row.provider = "gemini:gemini-embedding-001"
+    await db.commit()
+
+    embedding = await MockProvider().embed(first.complaint.ai_summary or LEAK_A)
+
+    same_space = await find_similar_complaints(
+        db,
+        embedding=embedding,
+        category_id=first.complaint.category_id,
+        location_building=BUILDING,
+        embedding_provider="gemini:gemini-embedding-001",
+    )
+    other_space = await find_similar_complaints(
+        db,
+        embedding=embedding,
+        category_id=first.complaint.category_id,
+        location_building=BUILDING,
+        embedding_provider="mock",
+    )
+
+    assert len(same_space) == 1
+    assert other_space == [], "a mock query must not see a Gemini-space vector"

@@ -91,11 +91,31 @@ class FallbackProvider(AIProvider):
         )
 
     async def embed(self, text: str) -> list[float]:
-        return await self._call(
-            "embed",
-            lambda: self._primary.embed(text),
-            lambda: self._fallback.embed(text),
-        )
+        vector, _ = await self.embed_with_provenance(text)
+        return vector
+
+    async def embed_with_provenance(self, text: str) -> tuple[list[float], str]:
+        """Embed, reporting which provider's vector space the result is in.
+
+        Tracked per call rather than on the instance because a degrade is
+        transient: the next request may well be served by the primary again,
+        and an embedding tagged with the wrong space is worse than no
+        embedding at all.
+        """
+        served_by: list[str] = []
+
+        async def _primary() -> list[float]:
+            result = await self._primary.embed(text)
+            served_by.append(getattr(self._primary, "provider_name", "primary"))
+            return result
+
+        async def _fallback() -> list[float]:
+            result = await self._fallback.embed(text)
+            served_by.append(getattr(self._fallback, "provider_name", "mock"))
+            return result
+
+        vector = await self._call("embed", _primary, _fallback)
+        return vector, (served_by[-1] if served_by else "unknown")
 
     async def answer_question(
         self, question: str, records: list[dict], schema_hint: str = ""

@@ -166,6 +166,10 @@ class GeminiProvider(AIProvider):
         self._models = settings.gemini_model_chain
         self._model = self._models[0]
         self._embedding_model = settings.gemini_embedding_model
+        # The vector space is defined by the *embedding* model, not the
+        # generation model, so only that goes into the identity.
+        self.provider_name = f"gemini:{self._embedding_model}"
+
         if not settings.llm_api_key:
             raise ValueError(
                 "LLM_PROVIDER=gemini but LLM_API_KEY is empty. Set it in "

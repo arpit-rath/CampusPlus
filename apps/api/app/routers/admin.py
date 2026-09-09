@@ -17,7 +17,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.db.database import get_db
-from app.db.models import Category, Complaint, ComplaintCluster, Department, StatusEvent
+from app.db.models import (
+    Category,
+    Complaint,
+    ComplaintCluster,
+    ComplaintEmbedding,
+    Department,
+    StatusEvent,
+)
 from app.deps import require_admin
 from app.pipeline import chaos as chaos_generator
 from app.pipeline.ask import answer_admin_question
@@ -444,8 +451,22 @@ async def admin_stats(db: AsyncSession = Depends(get_db)) -> dict:
         )
     ).scalar_one()
 
+    # Which embedding spaces are represented. More than one means some
+    # complaints were embedded by Gemini and others by the mock fallback, and
+    # those two groups can never merge with each other — worth seeing before
+    # a demo rather than discovering on stage.
+    provider_rows = (
+        await db.execute(
+            select(ComplaintEmbedding.provider, func.count())
+            .group_by(ComplaintEmbedding.provider)
+            .order_by(func.count().desc())
+        )
+    ).all()
+
     by_status = {row[0]: row[1] for row in status_rows}
     return {
+        "embedding_providers": {row[0]: row[1] for row in provider_rows},
+        "embedding_providers_mixed": len(provider_rows) > 1,
         "open": by_status.get("open", 0),
         "in_progress": by_status.get("in_progress", 0),
         "resolved": by_status.get("resolved", 0),

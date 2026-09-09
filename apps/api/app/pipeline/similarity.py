@@ -49,6 +49,7 @@ async def find_similar_complaints(
     category_id: uuid.UUID | None,
     location_building: str | None,
     exclude_complaint_id: uuid.UUID | None = None,
+    embedding_provider: str | None = None,
     window_days: int = 14,
     limit: int = 20,
 ) -> list[SimilarComplaint]:
@@ -90,6 +91,11 @@ async def find_similar_complaints(
     )
     if exclude_complaint_id is not None:
         stmt = stmt.where(Complaint.id != exclude_complaint_id)
+    if embedding_provider is not None:
+        # Only compare vectors from the same embedding model. Without this a
+        # single fallback-to-mock during a Gemini run would leave a complaint
+        # that can never match its own duplicates.
+        stmt = stmt.where(ComplaintEmbedding.provider == embedding_provider)
 
     rows = (await db.execute(stmt)).all()
     return [

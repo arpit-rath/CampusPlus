@@ -68,6 +68,25 @@ class AIProvider(Protocol):
         ...
 
 
+async def embed_with_provenance(
+    provider: "AIProvider", text: str
+) -> tuple[list[float], str]:
+    """Embed `text` and report which vector space the result belongs to.
+
+    Mock embeddings and Gemini embeddings are not comparable — cosine
+    similarity between them is meaningless noise. If a Gemini call falls back
+    to the mock mid-demo, those complaints would silently never match their
+    neighbours and clustering would appear to be broken. Recording the origin
+    lets `find_similar_complaints` compare like with like, so a mixed dataset
+    degrades into visibly separate clusters instead of quietly failing.
+    """
+    embedder = getattr(provider, "embed_with_provenance", None)
+    if embedder is not None:
+        return await embedder(text)
+    vector = await provider.embed(text)
+    return vector, getattr(provider, "provider_name", "unknown")
+
+
 def get_provider() -> AIProvider:
     """Read `settings.llm_provider` and return the matching concrete provider.
 

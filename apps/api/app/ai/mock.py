@@ -248,6 +248,11 @@ def _mock_answer(question: str, records: list[dict]) -> str:
 class MockProvider(AIProvider):
     """Deterministic fake `AIProvider` — no network calls."""
 
+    # Identifies the vector space this provider's embeddings live in.
+    # Stored alongside every embedding so similarity search never compares
+    # a mock vector against a Gemini one.
+    provider_name = "mock"
+
     async def answer_question(
         self, question: str, records: list[dict], schema_hint: str = ""
     ) -> dict:

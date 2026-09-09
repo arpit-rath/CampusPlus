@@ -556,6 +556,27 @@ async def _summarize_live(api_url: str) -> None:
     import httpx
 
     async with httpx.AsyncClient(base_url=api_url.rstrip("/"), timeout=30.0) as client:
+        # Which embedding spaces ended up in the database. More than one means
+        # some complaints were embedded by Gemini and others by the mock
+        # fallback; those two groups can never merge with each other, so a
+        # mixed dataset quietly halves the demo. Better to see it here.
+        try:
+            stats = (await client.get("/admin/stats")).json()
+            providers = stats.get("embedding_providers", {})
+            if providers:
+                mix = ", ".join(f"{name} x{count}" for name, count in providers.items())
+                print(f"\nEmbedding spaces: {mix}")
+            if stats.get("embedding_providers_mixed"):
+                print(
+                    "  WARNING: more than one embedding provider is represented.\n"
+                    "  Vectors from different providers are not comparable, so those\n"
+                    "  groups can never merge. Some Gemini calls most likely fell back\n"
+                    "  to the mock. Re-run with --reset once the provider is healthy."
+                )
+        except Exception:
+            # /admin/stats may be token-gated; the cluster summary still prints.
+            pass
+
         clusters = (await client.get("/clusters")).json()
         if not clusters:
             print("\nNo clusters formed. If the provider is `mock`, check that the")

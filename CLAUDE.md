@@ -123,6 +123,15 @@ during this build 3.8 and 3.7 both 503'd while 3.6 answered instantly — and
 stepping down a generation is a much better degrade than dropping to the mock.
 MockProvider remains the last resort.
 
+**Embedding spaces do not mix.** A mock vector and a Gemini vector are not
+comparable; cosine similarity between them is noise, not a low score. Every
+embedding therefore records the provider that produced it
+(`complaint_embeddings.provider`) and similarity search filters on it. Without
+this, one transient 503 mid-demo would leave a complaint that can never merge
+with its own duplicates. `/admin/stats` reports `embedding_providers_mixed`,
+and `seed_demo.py --post` warns loudly — if you see a mix, re-seed with
+`--reset` once the provider is healthy.
+
 ## Data model — source of truth
 
 Six tables. DDL lives in `apps/api/app/db/migrations/versions/`. Never

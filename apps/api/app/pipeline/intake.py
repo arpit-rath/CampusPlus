@@ -41,7 +41,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.provider import AIProvider, get_provider
+from app.ai.provider import AIProvider, embed_with_provenance, get_provider
 from app.config import Settings, get_settings
 from app.db.models import Category, Complaint, ComplaintCluster, ComplaintEmbedding, StatusEvent
 from app.pipeline import cluster as cluster_math
@@ -230,7 +230,12 @@ async def ingest_complaint(
     understanding = await ai.understand_complaint(description, image_bytes)
 
     # --- 2. embed the normalized summary, not the raw text --------------
-    embedding = await ai.embed(understanding.summary)
+    # The provider name travels with the vector: a mock embedding and a Gemini
+    # embedding are not comparable, so similarity search below is scoped to
+    # the space this one was produced in.
+    embedding, embedding_provider = await embed_with_provenance(
+        ai, understanding.summary
+    )
 
     category_row = (
         await db.execute(select(Category).where(Category.slug == understanding.category))
@@ -245,7 +250,13 @@ async def ingest_complaint(
         understanding.photo_matches_text if image_bytes is not None else None
     )
 
-    db.add(ComplaintEmbedding(complaint_id=complaint.id, embedding=list(embedding)))
+    db.add(
+        ComplaintEmbedding(
+            complaint_id=complaint.id,
+            embedding=list(embedding),
+            provider=embedding_provider,
+        )
+    )
     await db.flush()
 
     # --- 3. similarity search (pgvector, scoped) ------------------------
@@ -255,6 +266,7 @@ async def ingest_complaint(
         category_id=complaint.category_id,
         location_building=complaint.location_building,
         exclude_complaint_id=complaint.id,
+        embedding_provider=embedding_provider,
         window_days=settings.similarity_window_days,
         limit=settings.similarity_candidate_limit,
     )

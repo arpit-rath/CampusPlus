@@ -185,6 +185,10 @@ class ComplaintEmbedding(Base):
         primary_key=True,
     )
     embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIM), nullable=False)
+    # Which provider's vector space this embedding lives in. Similarity
+    # search filters on it, because a mock vector and a Gemini vector are not
+    # comparable — see migration 0003.
+    provider: Mapped[str] = mapped_column(String(64), nullable=False, default="mock")
 
     complaint: Mapped["Complaint"] = relationship(back_populates="embedding")
 
