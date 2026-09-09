@@ -1,0 +1,38 @@
+# Node / Next.js
+node_modules/
+.next/
+out/
+apps/web/.next/
+apps/web/node_modules/
+npm-debug.log*
+.pnpm-debug.log*
+
+# Python / FastAPI
+__pycache__/
+*.pyc
+.venv/
+venv/
+apps/api/__pycache__/
+apps/api/**/__pycache__/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Env files
+.env
+.env.local
+.env.*.local
+!*.env.example
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local db data
+pgdata/
+*.sqlite3
+
+# Claude worktrees (local only, never pushed)
+.claude/worktrees/
