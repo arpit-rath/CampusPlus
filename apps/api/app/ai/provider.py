@@ -2,10 +2,15 @@
 
 Per CLAUDE.md: **never import a provider SDK (google-genai, openai, ...)
 from a router or pipeline module.** Always go through `get_provider()`
-here. This keeps the system provider-agnostic and demo-safe — if
-`LLM_PROVIDER=gemini` and a live call errors or times out, callers are
-expected to fall back to `MockProvider` (see `understand_complaint`'s
-docstring below) rather than let the request 500.
+here. This keeps the system provider-agnostic and demo-safe.
+
+The "MockProvider is the automatic fallback on error/timeout" promise is
+implemented, not just documented: when `LLM_PROVIDER=gemini` and
+`LLM_FALLBACK_TO_MOCK` is on (the default), `get_provider()` hands back a
+`FallbackProvider` that wraps the live provider, applies
+`LLM_TIMEOUT_SECONDS` to every call, and degrades to `MockProvider` on
+timeout, rate-limit or API error. Callers therefore never need their own
+try/except around a provider call.
 """
 
 from __future__ import annotations
@@ -29,13 +34,11 @@ class AIProvider(Protocol):
         Pass `None` when no photo was attached — implementations must not
         require a photo.
 
-        Implementations should raise on hard failure (bad API key, network
-        error, malformed model output that can't be repaired) rather than
-        silently returning a low-confidence guess — `understand.py` (or
-        whatever calls this) is responsible for deciding whether to retry,
-        fall back to `MockProvider`, or propagate the error, per the
-        "MockProvider is the automatic fallback on error/timeout" note in
-        CLAUDE.md.
+        Implementations raise on hard failure (bad API key, network error,
+        model output that can't be repaired by
+        `schemas.parse_understanding`) rather than silently returning a
+        low-confidence guess. `FallbackProvider` is what turns those raises
+        into a graceful MockProvider degrade.
         """
         ...
 
@@ -43,10 +46,24 @@ class AIProvider(Protocol):
         """Return a 768-dim embedding vector for `text`.
 
         Embed the AI's normalized `summary`, not the raw student text, per
-        build-plan.md §4.2. Must always return exactly 768 floats — that's
-        the width of the `complaint_embeddings.embedding vector(768)`
-        column (CLAUDE.md's data model), so a provider returning a
-        different dimensionality is a bug, not a valid variant.
+        build-plan.md section 4.2. Must always return exactly 768 floats —
+        that is the width of the `complaint_embeddings.embedding
+        vector(768)` column, so a provider returning a different
+        dimensionality is a bug, not a valid variant.
+        """
+        ...
+
+    async def answer_question(
+        self, question: str, records: list[dict], schema_hint: str = ""
+    ) -> dict:
+        """Answer an admin question *strictly* from `records`.
+
+        `records` are real complaint rows that `app/pipeline/ask.py` has
+        already fetched and filtered with ordinary SQLAlchemy — the model
+        never writes or influences a query. Returns
+        ``{"answer": str, "cited_complaint_ids": list[str]}``; the caller
+        intersects the returned ids with the ids it supplied, so a
+        hallucinated id can never reach the client.
         """
         ...
 
@@ -56,21 +73,43 @@ def get_provider() -> AIProvider:
 
     - `"gemini"` -> `GeminiProvider` (imports `google-genai` lazily, inside
       this branch, so a `mock`-only dev environment never needs the SDK
-      installed).
+      installed), wrapped in `FallbackProvider` unless
+      `LLM_FALLBACK_TO_MOCK=false`.
     - `"mock"` (default) -> `MockProvider`.
     - anything else (e.g. the `openai`/`claude` stubs mentioned in
-      CLAUDE.md) -> falls back to `MockProvider` for now; there's nothing
-      to route to yet.
+      CLAUDE.md) -> falls back to `MockProvider`; there is nothing to route
+      to yet.
     """
     settings = get_settings()
     provider = settings.llm_provider.strip().lower()
 
-    if provider == "gemini":
-        from app.ai.gemini import GeminiProvider
-
-        return GeminiProvider()
-
-    # "mock" and any not-yet-implemented provider name both land here.
     from app.ai.mock import MockProvider
 
+    if provider == "gemini":
+        from app.ai.fallback import FallbackProvider
+        from app.ai.gemini import GeminiProvider
+
+        live: AIProvider = GeminiProvider()
+        if not settings.llm_fallback_to_mock:
+            return live
+        return FallbackProvider(
+            primary=live,
+            fallback=MockProvider(),
+            timeout_seconds=settings.llm_timeout_seconds,
+        )
+
+    # "mock" and any not-yet-implemented provider name both land here.
     return MockProvider()
+
+
+def describe_provider() -> dict:
+    """Small status blob for `/health`, so a demo can see what is actually live."""
+    settings = get_settings()
+    provider = settings.llm_provider.strip().lower()
+    configured = provider == "gemini" and bool(settings.llm_api_key)
+    return {
+        "llm_provider": provider,
+        "api_key_configured": configured,
+        "fallback_to_mock": settings.llm_fallback_to_mock,
+        "effective": "gemini" if configured else "mock",
+    }

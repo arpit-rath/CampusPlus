@@ -161,3 +161,30 @@ def cluster_embeddings(
     # in each group (dict insertion order from the loop above already
     # gives us this, since `i` is visited in order).
     return list(groups.values())
+
+
+def count_independent_students(
+    members: Sequence[tuple[str, str | None]],
+) -> int:
+    """Distinct reporters among `(complaint_id, student_id)` pairs.
+
+    CLAUDE.md's recurring rule is about *independent students*, not about
+    submissions: a cluster is recurring once three different people have
+    reported it. Counting rows instead would let one frustrated student
+    reporting the same broken cooler five times manufacture a campus-wide
+    "recurring issue", which is exactly the failure the rule exists to
+    prevent.
+
+    A `None` student_id is an anonymous report, and each one counts as its
+    own reporter (keyed by complaint id). That direction is deliberate:
+    treating every anonymous report as the same person would *under*-count
+    a genuine recurring problem reported by three students who all chose not
+    to identify themselves, and under-counting a real safety issue is the
+    worse error.
+
+    The database-backed equivalent is
+    `app.pipeline.similarity.count_independent_students`, which computes the
+    same number in SQL; this pure version is what the offline seed/test path
+    uses.
+    """
+    return len({student_id or f"anon:{complaint_id}" for complaint_id, student_id in members})

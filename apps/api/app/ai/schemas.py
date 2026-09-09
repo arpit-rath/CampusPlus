@@ -144,3 +144,112 @@ class ComplaintUnderstanding:
             "summary": self.summary,
             "extracted_location_hint": self.extracted_location_hint,
         }
+
+
+# --- Validation --------------------------------------------------------
+#
+# A `response_schema` makes malformed output unlikely, not impossible: the
+# model can still return a missing key, a string where an int belongs, or
+# a category slug that isn't in our enum. Every provider funnels its raw
+# payload through `parse_understanding` so that repair logic lives in
+# exactly one place and both providers (and the tests) agree on it.
+
+
+class MalformedUnderstandingError(ValueError):
+    """Raised when a provider payload can't be repaired into a usable result."""
+
+
+def _coerce_bool(value: object, default: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "yes", "1"}
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return default
+
+
+def _coerce_int(value: object, default: int) -> int:
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+
+
+def parse_understanding(
+    payload: object, *, fallback_summary: str = ""
+) -> ComplaintUnderstanding:
+    """Validate + repair a raw provider payload into a `ComplaintUnderstanding`.
+
+    Repairs (rather than rejects) the failure modes that are recoverable:
+    an unknown/missing category becomes ``"other"``, a non-integer or
+    out-of-range severity is coerced and clamped to 1-5 (via
+    ``ComplaintUnderstanding.__post_init__``), non-boolean flags are
+    coerced, and a missing summary falls back to `fallback_summary`.
+
+    Raises `MalformedUnderstandingError` only for the one thing that can't
+    be repaired: a payload that isn't a JSON object at all, or one with no
+    usable summary text and no fallback to substitute.
+    """
+    if not isinstance(payload, dict):
+        raise MalformedUnderstandingError(
+            f"expected a JSON object from the provider, got {type(payload).__name__}"
+        )
+
+    summary = payload.get("summary")
+    if not isinstance(summary, str) or not summary.strip():
+        summary = fallback_summary.strip()
+    if not summary:
+        raise MalformedUnderstandingError(
+            "provider returned no usable summary and no fallback was supplied"
+        )
+
+    location_hint = payload.get("extracted_location_hint")
+    if not isinstance(location_hint, str):
+        location_hint = ""
+
+    return ComplaintUnderstanding(
+        category=payload.get("category") if isinstance(payload.get("category"), str) else "other",
+        severity=_coerce_int(payload.get("severity"), default=3),
+        safety_flag=_coerce_bool(payload.get("safety_flag")),
+        photo_matches_text=_coerce_bool(payload.get("photo_matches_text")),
+        summary=summary.strip(),
+        extracted_location_hint=location_hint.strip(),
+        raw=payload,
+    )
+
+
+# --- "Ask CampusPluse" answer schema -----------------------------------
+#
+# Phase 11 of the implementation plan: the model never writes SQL and never
+# invents complaint ids. It is handed a pre-filtered, pre-fetched set of
+# real complaint records (fetched by `app/pipeline/ask.py` through ordinary
+# SQLAlchemy) and asked only to write prose over them plus name which of
+# the ids it actually leaned on. Whatever ids it returns are intersected
+# with the ids we supplied before they reach the caller.
+GEMINI_ANSWER_SCHEMA: dict = {
+    "type": "OBJECT",
+    "properties": {
+        "answer": {
+            "type": "STRING",
+            "description": (
+                "A direct, 1-3 sentence answer to the administrator's "
+                "question, stated only from the complaint records provided. "
+                "Cite concrete numbers and building names. If the records "
+                "don't answer the question, say so plainly rather than "
+                "speculating."
+            ),
+        },
+        "cited_complaint_ids": {
+            "type": "ARRAY",
+            "items": {"type": "STRING"},
+            "description": (
+                "The ids of the specific complaint records that support the "
+                "answer. Only ids that appear verbatim in the provided "
+                "records — never invent one."
+            ),
+        },
+    },
+    "required": ["answer", "cited_complaint_ids"],
+    "property_ordering": ["answer", "cited_complaint_ids"],
+}

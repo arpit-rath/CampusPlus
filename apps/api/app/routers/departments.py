@@ -104,7 +104,9 @@ async def update_department(
     return department
 
 
-@router.delete("/{department_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{department_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None
+)
 async def delete_department(
     department_id: uuid.UUID, db: AsyncSession = Depends(get_db)
 ) -> None:

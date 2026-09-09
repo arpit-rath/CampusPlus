@@ -101,7 +101,10 @@ class Complaint(Base):
     )
     student_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     raw_description: Mapped[str] = mapped_column(Text, nullable=False)
-    photo_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    # Text, not String(2048): a photo URL is short, but this column has
+    # historically been handed raw base64 data URLs and silently
+    # overflowing a varchar during a live demo is not a risk worth taking.
+    photo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     location_building: Mapped[str | None] = mapped_column(String(255), nullable=True)
     location_room: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
@@ -114,11 +117,40 @@ class Complaint(Base):
 
     severity: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     safety_flag: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # True only when a photo was supplied AND the model judged it to
+    # corroborate the text. NULL means "no photo" — the photo-verification
+    # badge in the UI distinguishes all three states.
+    photo_matches_text: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     priority_score: Mapped[float | None] = mapped_column(Float, nullable=True, default=0.0)
+
+    # CLAUDE.md: "All four terms get stored per-complaint (not just the
+    # final number) so the UI can render a 4-segment breakdown bar instead
+    # of an opaque score." These are the already-weighted contributions and
+    # sum to priority_score.
+    priority_severity: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    priority_frequency: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    priority_safety: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    priority_sla_age: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
 
     # FK constraint added in the migration after complaint_clusters exists
     # (circular reference — see module docstring).
     cluster_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+
+    # The 0.75-0.92 "suggested merge" band. Points at the *complaint* we
+    # think this duplicates rather than at a cluster, because the closest
+    # match is very often itself still unclustered — a suggestion has to be
+    # expressible before any cluster exists. Recorded, never auto-applied:
+    # an admin confirms or dismisses it from the dashboard.
+    suggested_match_complaint_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    suggested_similarity: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Set when an admin manually re-routes a complaint, so a later
+    # re-classification never silently undoes a human decision.
+    department_overridden: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
 
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="open")
     ai_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -174,6 +206,13 @@ class ComplaintCluster(Base):
         UUID(as_uuid=True), ForeignKey("complaints.id", ondelete="SET NULL"), nullable=True
     )
     member_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # Distinct `complaints.student_id` values in this cluster. This — not
+    # `member_count` — is what `is_recurring` is derived from, so one
+    # student submitting the same complaint five times never fakes a
+    # recurring campus-wide problem.
+    independent_student_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1
+    )
     is_recurring: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     first_seen: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

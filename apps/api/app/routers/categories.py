@@ -108,7 +108,9 @@ async def update_category(
     return category
 
 
-@router.delete("/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{category_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None
+)
 async def delete_category(
     category_id: uuid.UUID, db: AsyncSession = Depends(get_db)
 ) -> None:

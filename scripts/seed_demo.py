@@ -16,11 +16,28 @@ as:
   running it is itself a smoke test of `understand.py`/`cluster.py`/
   `priority.py` working together end to end.
 
+Two modes:
+
+**Offline (default)** — writes a JSON fixture and runs the real clustering
+and priority code over its own data via `MockProvider`, so running it is
+itself a smoke test of `cluster.py` + `priority.py` with no database and no
+network.
+
+**Live (`--post`)** — POSTs each complaint to a running API, which drives
+the *actual* pipeline: Gemini or mock understanding, real embeddings, real
+pgvector similarity search, real cluster rows. This is what you run before a
+demo so the dashboard has history in it, and it is the only mode that
+proves the end-to-end path works.
+
 Usage:
-    python3 scripts/seed_demo.py                # writes scripts/demo_data.json
+    python3 scripts/seed_demo.py                     # writes scripts/demo_data.json
     python3 scripts/seed_demo.py --out path.json
-    python3 scripts/seed_demo.py --pretty        # (default) indented JSON
-    python3 scripts/seed_demo.py --compact       # single-line JSON
+    python3 scripts/seed_demo.py --compact           # single-line JSON
+    python3 scripts/seed_demo.py --post              # seed a running API at :8000
+    python3 scripts/seed_demo.py --post --api-url http://localhost:8000
+    python3 scripts/seed_demo.py --post --reset           # clear first, then seed
+    python3 scripts/seed_demo.py --post --only-clusters   # just the two merge clusters
+    python3 scripts/seed_demo.py --post --delay 0.8       # pace it for a live audience
 
 Every field in the output is deterministic (same run -> same file), since
 `MockProvider` is deterministic and every timestamp is computed from a
@@ -32,6 +49,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -42,6 +60,19 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 API_ROOT = REPO_ROOT / "apps" / "api"
 if str(API_ROOT) not in sys.path:
     sys.path.insert(0, str(API_ROOT))
+
+# pydantic-settings resolves `env_file=".env"` relative to the *current working
+# directory*, so running this from the repo root would silently ignore
+# apps/api/.env and fall back to the default localhost:5432 -- a confusing
+# "connection refused" a long way from its cause. Point it at the real file.
+os.environ.setdefault("PYDANTIC_SETTINGS_ENV_FILE", str(API_ROOT / ".env"))
+if (API_ROOT / ".env").exists():
+    for _line in (API_ROOT / ".env").read_text(encoding="utf-8").splitlines():
+        _line = _line.strip()
+        if not _line or _line.startswith("#") or "=" not in _line:
+            continue
+        _key, _, _value = _line.partition("=")
+        os.environ.setdefault(_key.strip(), _value.strip())
 
 from app.ai.mock import MockProvider  # noqa: E402
 from app.config import get_settings  # noqa: E402
@@ -429,6 +460,119 @@ async def _generate() -> list[dict]:
     return complaints
 
 
+# --- Live mode: drive the real API ---------------------------------------
+#
+# The offline path above proves the *math* works. This path proves the
+# *system* works: it is the only way to exercise Gemini/mock understanding,
+# pgvector similarity and real cluster rows together, which is precisely the
+# thing a demo has to not discover is broken on stage.
+
+# Complaints in the two near-duplicate clusters, in submission order. Posting
+# only these is the fastest way to reproduce the signature demo moment.
+_CLUSTER_INDEXES = range(0, 7)
+
+
+async def _reset_database() -> None:
+    """Clear all complaint data so a demo starts from a known baseline.
+
+    Development only, and the one operation in this script that bypasses the
+    API — there is deliberately no "delete everything" endpoint, and adding
+    one just so a seed script could call it would be a worse trade than a
+    local script talking to the local database.
+
+    Reference data (departments, categories) is preserved: it comes from
+    migration 0001 and re-running the migration to get it back would be a
+    silly thing to require.
+    """
+    from sqlalchemy import text
+
+    from app.db.database import async_session_factory
+
+    async with async_session_factory() as session:
+        await session.execute(
+            text(
+                "TRUNCATE status_events, complaint_embeddings, complaints, "
+                "complaint_clusters RESTART IDENTITY CASCADE"
+            )
+        )
+        await session.commit()
+
+
+async def _post_complaints(
+    api_url: str, indexes: list[int], delay: float, verbose: bool
+) -> int:
+    import httpx
+
+    posted = 0
+    async with httpx.AsyncClient(base_url=api_url.rstrip("/"), timeout=60.0) as client:
+        try:
+            health = await client.get("/health")
+            health.raise_for_status()
+        except Exception as exc:  # noqa: BLE001
+            print(f"Cannot reach the API at {api_url}: {exc}")
+            print("Start it first:  cd apps/api && uvicorn app.main:app --reload --port 8000")
+            return 0
+
+        info = health.json()
+        print(
+            f"API up. provider={info.get('llm_effective')} "
+            f"duplicate>={info.get('thresholds', {}).get('duplicate')} "
+            f"recurring>={info.get('thresholds', {}).get('recurring_students')} students"
+        )
+
+        for index in indexes:
+            raw = RAW_COMPLAINTS[index]
+            response = await client.post(
+                "/complaints",
+                json={
+                    "description": raw.description,
+                    "location_building": raw.location_building,
+                    "location_room": raw.location_room,
+                    "student_id": raw.student_id,
+                },
+            )
+            if response.status_code >= 400:
+                print(f"  [{index + 1}] FAILED {response.status_code}: {response.text[:200]}")
+                continue
+
+            body = response.json()
+            posted += 1
+            if verbose:
+                marker = "RECURRING" if body.get("is_recurring") else "         "
+                print(
+                    f"  [{index + 1:>2}] {marker} "
+                    f"{(body.get('category_slug') or '?'):<15} "
+                    f"@ {(body.get('location_building') or '?'):<18} "
+                    f"priority={body.get('priority_score', 0):.3f} "
+                    f"cluster={body.get('independent_student_count', 1)} student(s)"
+                )
+            if delay:
+                await asyncio.sleep(delay)
+
+    return posted
+
+
+async def _summarize_live(api_url: str) -> None:
+    import httpx
+
+    async with httpx.AsyncClient(base_url=api_url.rstrip("/"), timeout=30.0) as client:
+        clusters = (await client.get("/clusters")).json()
+        if not clusters:
+            print("\nNo clusters formed. If the provider is `mock`, check that the")
+            print("near-duplicate wording in RAW_COMPLAINTS still clears the threshold.")
+            return
+        print("\nClusters the API actually built:")
+        for entry in clusters:
+            flag = "RECURRING" if entry["is_recurring"] else "forming  "
+            print(
+                f"  {flag} {entry['category_slug']:<15} @ "
+                f"{(entry['location_building'] or '?'):<18} "
+                f"{entry['independent_student_count']} independent student(s), "
+                f"{entry['member_count']} report(s), "
+                f"max priority {entry['max_priority_score']:.3f}"
+            )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -444,7 +588,49 @@ def main() -> None:
     format_group.add_argument(
         "--compact", action="store_true", help="Single-line JSON instead of indented"
     )
+    parser.add_argument(
+        "--post",
+        action="store_true",
+        help="POST the complaints to a running API instead of only writing JSON",
+    )
+    parser.add_argument(
+        "--api-url",
+        default="http://localhost:8000",
+        help="Base URL of the running API (default: http://localhost:8000)",
+    )
+    parser.add_argument(
+        "--only-clusters",
+        action="store_true",
+        help="With --post, submit only the two near-duplicate clusters (7 complaints)",
+    )
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="With --post, clear all existing complaint data first (dev only)",
+    )
+    parser.add_argument(
+        "--delay",
+        type=float,
+        default=0.0,
+        help="With --post, seconds to wait between submissions (pace a live demo)",
+    )
     args = parser.parse_args()
+
+    if args.post:
+        indexes = (
+            list(_CLUSTER_INDEXES) if args.only_clusters else list(range(len(RAW_COMPLAINTS)))
+        )
+        if args.reset:
+            asyncio.run(_reset_database())
+            print("Cleared existing complaint data.")
+        print(f"Posting {len(indexes)} complaint(s) to {args.api_url} ...")
+        posted = asyncio.run(
+            _post_complaints(args.api_url, indexes, args.delay, verbose=True)
+        )
+        if posted:
+            asyncio.run(_summarize_live(args.api_url))
+            print(f"\nSubmitted {posted}/{len(indexes)} complaints through the real pipeline.")
+        return
 
     complaints = asyncio.run(_generate())
 

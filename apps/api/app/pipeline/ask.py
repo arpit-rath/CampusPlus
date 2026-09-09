@@ -1,183 +1,347 @@
-""""Ask CampusPluse" — a simple natural-language query over admin complaint
-data (build-plan.md §6/§7). Backs `POST /admin/ask` (see `api.ts`'s
-`askAdmin`, which expects `{answer, cited_complaint_ids}`).
+"""Ask CampusPluse — natural-language querying over admin complaint data.
 
-Deliberately not real RAG: this is a keyword/category/building filter over
-whatever complaint dicts the caller already has in memory (the router owns
-fetching them from the DB), followed by one provider call that summarizes
-the filtered set in a sentence or two and is told to only cite ids it was
-actually given. Good enough for a hackathon demo box of a few dozen to a
-few hundred complaints; not built to scale past that.
+Implementation-plan phase 11 is emphatic that the model must never execute
+arbitrary SQL, and that answers must be grounded in real rows. The design
+here takes that literally and splits the job in two:
+
+1. **`extract_filters` (no model involved).** The question is parsed into a
+   small, closed set of typed filters — category slug, building, status,
+   recurring-only, safety-only, a day window, and a "most urgent" ordering
+   hint. Anything it does not recognise is simply not filtered on. This is
+   a vocabulary match against values that exist in our own schema, so there
+   is no injection surface: the question text never reaches SQL, only the
+   enum values it matched do.
+
+2. **`answer_admin_question` (model summarizes, nothing more).** The
+   filters run as an ordinary parameterized SQLAlchemy query. The rows that
+   come back are handed to the provider as data, with an instruction to
+   answer only from them. Whatever ids the model names are then intersected
+   with the ids we actually supplied, so a hallucinated id cannot survive
+   into the response even if the model invents one.
+
+The result is that the worst a bad model answer can do is be unhelpful. It
+cannot read a row the caller was not entitled to, and it cannot cite a
+complaint that does not exist.
 """
 
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timedelta, timezone
 from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.ai.provider import AIProvider, get_provider
 from app.ai.schemas import CATEGORY_SLUGS
+from app.db.models import Category, Complaint, ComplaintCluster
 
-_TOKEN_RE = re.compile(r"[a-z0-9]+")
-
-_STOPWORDS = {
-    "the", "a", "an", "is", "are", "was", "were", "in", "on", "at", "to",
-    "of", "and", "or", "with", "for", "this", "that", "it", "how", "many",
-    "what", "which", "show", "me", "there", "have", "has", "had", "do",
-    "does", "any", "all", "list", "give", "us", "please", "about",
+# Words in the question that map onto a category slug. Kept next to
+# CATEGORY_SLUGS so an added category is one edit away from being askable.
+_CATEGORY_SYNONYMS: dict[str, tuple[str, ...]] = {
+    "wifi": ("wifi", "wi-fi", "internet", "network", "connectivity", "broadband"),
+    "electrical": ("electrical", "electricity", "power", "wiring", "socket", "outlet", "light"),
+    "sanitation": ("sanitation", "water", "toilet", "washroom", "bathroom", "hygiene", "garbage", "drain", "leak"),
+    # "building" is deliberately absent. It is overwhelmingly a question word
+    # ("which building has the most...?") rather than a category signal, and
+    # including it silently narrowed general questions down to infrastructure.
+    "infrastructure": ("infrastructure", "ceiling", "door", "window", "lift", "elevator", "furniture", "structural"),
+    "academics": ("academics", "academic", "class", "lecture", "exam", "faculty", "timetable"),
+    "other": ("other",),
 }
 
-_MAX_MATCHES_FOR_PROMPT = 25
-_MAX_MATCHES_TO_CONSIDER = 200
+_STATUS_SYNONYMS: dict[str, tuple[str, ...]] = {
+    "open": ("open", "unresolved", "outstanding", "pending"),
+    "in_progress": ("in progress", "in-progress", "being fixed", "underway", "ongoing"),
+    "resolved": ("resolved", "closed", "fixed", "done"),
+}
+
+_RECURRING_WORDS = ("recurring", "repeated", "repeat", "again and again", "keeps happening", "chronic")
+# Only words that actually mean *physical danger*. "urgent" and "risk" used to
+# be here and were wrong: "the most urgent problems" is a question about
+# priority ordering, not a request to see only safety-flagged rows, and
+# treating it as a filter quietly hid every non-safety complaint.
+_SAFETY_WORDS = ("safety", "unsafe", "dangerous", "danger", "hazard", "hazardous")
+
+# "this week" / "last 3 days" / "past month" -> a day window.
+_NAMED_WINDOWS: list[tuple[tuple[str, ...], int]] = [
+    (("today", "past 24 hours", "last 24 hours"), 1),
+    (("this week", "past week", "last week", "last 7 days", "past 7 days"), 7),
+    (("this month", "past month", "last month", "last 30 days", "past 30 days"), 30),
+    (("this term", "this semester"), 120),
+]
+_NUMERIC_WINDOW_RE = re.compile(r"\b(?:last|past)\s+(\d{1,3})\s*(day|week|month)s?\b")
+
+_MAX_RECORDS_TO_MODEL = 25
+_MAX_RECORDS_TO_FETCH = 200
 
 
-def _tokenize(text: str) -> set[str]:
-    return {t for t in _TOKEN_RE.findall(text.lower()) if t not in _STOPWORDS}
+def _mentions(text: str, phrase: str) -> bool:
+    """Whole-word/phrase containment.
 
-
-def _complaint_haystack(complaint: dict[str, Any]) -> set[str]:
-    """Tokens pulled from every field a question might reasonably reference."""
-    fields = [
-        complaint.get("raw_description", ""),
-        complaint.get("ai_summary", "") or "",
-        complaint.get("category_slug", "") or "",
-        complaint.get("location_building", "") or "",
-        complaint.get("location_room", "") or "",
-        complaint.get("department_name", "") or "",
-        complaint.get("status", "") or "",
-    ]
-    tokens: set[str] = set()
-    for field in fields:
-        tokens |= _tokenize(str(field))
-    return tokens
-
-
-def _filter_complaints(
-    question: str, complaints: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
-    """Keyword/category/building overlap filter.
-
-    A complaint matches if it shares at least one non-stopword token with
-    the question. If that filter yields nothing (e.g. a very generic
-    question like "what's most urgent?"), fall back to considering
-    everything, up to `_MAX_MATCHES_TO_CONSIDER`, sorted by priority so the
-    most relevant/urgent items are what actually get summarized.
+    Plain substring matching is wrong here in a way that silently corrupts
+    results: "unresolved" contains "resolved", so "show unresolved issues"
+    was being read as asking for open AND resolved complaints at once. Word
+    boundaries also stop a category keyword matching inside an unrelated
+    longer word.
     """
-    question_tokens = _tokenize(question)
+    return re.search(rf"\b{re.escape(phrase)}\b", text) is not None
 
-    if question_tokens:
-        matches = [
-            c for c in complaints if question_tokens & _complaint_haystack(c)
-        ]
-        if matches:
-            matches.sort(key=lambda c: c.get("priority_score", 0), reverse=True)
-            return matches[:_MAX_MATCHES_TO_CONSIDER]
 
-    fallback = sorted(
-        complaints, key=lambda c: c.get("priority_score", 0), reverse=True
+@dataclass
+class QueryFilters:
+    """The closed set of things a natural-language question can influence."""
+
+    category_slugs: list[str] = field(default_factory=list)
+    buildings: list[str] = field(default_factory=list)
+    statuses: list[str] = field(default_factory=list)
+    recurring_only: bool = False
+    safety_only: bool = False
+    window_days: int | None = None
+
+    def describe(self) -> str:
+        """Human-readable rendering, shown to the admin so the filtering is
+        never a black box — they can see exactly what the question was read
+        as before trusting the answer."""
+        parts: list[str] = []
+        if self.category_slugs:
+            parts.append("category " + "/".join(self.category_slugs))
+        if self.buildings:
+            parts.append("in " + "/".join(self.buildings))
+        if self.statuses:
+            parts.append("status " + "/".join(self.statuses))
+        if self.recurring_only:
+            parts.append("recurring only")
+        if self.safety_only:
+            parts.append("safety-flagged only")
+        if self.window_days:
+            parts.append(f"last {self.window_days} day(s)")
+        return ", ".join(parts) if parts else "no filters (all complaints)"
+
+
+def extract_filters(question: str, known_buildings: list[str]) -> QueryFilters:
+    """Map a free-text question onto typed filters. Never touches SQL.
+
+    `known_buildings` comes from the database, so a building name only
+    becomes a filter if it is a real building we already store.
+    """
+    text = question.lower()
+    filters = QueryFilters()
+
+    for slug, words in _CATEGORY_SYNONYMS.items():
+        if slug in CATEGORY_SLUGS and any(_mentions(text, word) for word in words):
+            filters.category_slugs.append(slug)
+
+    for building in known_buildings:
+        if building and building.lower() in text:
+            filters.buildings.append(building)
+
+    for status_value, words in _STATUS_SYNONYMS.items():
+        if any(_mentions(text, word) for word in words):
+            filters.statuses.append(status_value)
+
+    filters.recurring_only = any(_mentions(text, word) for word in _RECURRING_WORDS)
+    filters.safety_only = any(_mentions(text, word) for word in _SAFETY_WORDS)
+
+    for words, days in _NAMED_WINDOWS:
+        if any(_mentions(text, word) for word in words):
+            filters.window_days = days
+            break
+    match = _NUMERIC_WINDOW_RE.search(text)
+    if match:
+        amount, unit = int(match.group(1)), match.group(2)
+        filters.window_days = amount * {"day": 1, "week": 7, "month": 30}[unit]
+
+    return filters
+
+
+async def fetch_records(
+    db: AsyncSession, filters: QueryFilters, *, limit: int = _MAX_RECORDS_TO_FETCH
+) -> list[dict[str, Any]]:
+    """Run `filters` as one parameterized query and flatten the rows.
+
+    Ordered by priority so that, when the result set is truncated, what
+    survives is what an administrator would most want to hear about.
+    """
+    stmt = (
+        select(Complaint)
+        .options(
+            selectinload(Complaint.category),
+            selectinload(Complaint.department),
+            selectinload(Complaint.cluster),
+        )
+        .order_by(Complaint.priority_score.desc(), Complaint.created_at.desc())
+        .limit(limit)
     )
-    return fallback[:_MAX_MATCHES_TO_CONSIDER]
+
+    if filters.category_slugs:
+        stmt = stmt.join(Category, Complaint.category_id == Category.id).where(
+            Category.slug.in_(filters.category_slugs)
+        )
+    if filters.buildings:
+        stmt = stmt.where(Complaint.location_building.in_(filters.buildings))
+    if filters.statuses:
+        stmt = stmt.where(Complaint.status.in_(filters.statuses))
+    if filters.safety_only:
+        stmt = stmt.where(Complaint.safety_flag.is_(True))
+    if filters.recurring_only:
+        stmt = stmt.join(
+            ComplaintCluster, Complaint.cluster_id == ComplaintCluster.id
+        ).where(ComplaintCluster.is_recurring.is_(True))
+    if filters.window_days:
+        since = datetime.now(timezone.utc) - timedelta(days=filters.window_days)
+        stmt = stmt.where(Complaint.created_at >= since)
+
+    complaints = (await db.execute(stmt)).scalars().all()
+    return [_record(c) for c in complaints]
 
 
-def _no_match_answer(question: str) -> dict:
+def _record(complaint: Complaint) -> dict[str, Any]:
+    """The compact projection handed to the model — no raw photo, no internals."""
     return {
-        "answer": (
-            "I couldn't find any complaints matching that question in the "
-            "current data. Try mentioning a category "
-            f"({', '.join(CATEGORY_SLUGS)}), a building, or a keyword from "
-            "the report text."
+        "id": str(complaint.id),
+        "ai_summary": complaint.ai_summary,
+        "raw_description": complaint.raw_description[:400],
+        "category_slug": complaint.category.slug if complaint.category else None,
+        "department_name": complaint.department.name if complaint.department else None,
+        "location_building": complaint.location_building,
+        "location_room": complaint.location_room,
+        "severity": complaint.severity,
+        "safety_flag": complaint.safety_flag,
+        "status": complaint.status,
+        "priority_score": round(complaint.priority_score or 0.0, 3),
+        "is_recurring": bool(complaint.cluster and complaint.cluster.is_recurring),
+        "independent_student_count": (
+            complaint.cluster.independent_student_count if complaint.cluster else 1
         ),
-        "cited_complaint_ids": [],
+        "created_at": complaint.created_at.isoformat() if complaint.created_at else None,
     }
 
 
-def _build_data_blurb(question: str, matches: list[dict[str, Any]]) -> str:
-    """A short, data-dense, plain-English blurb built from `matches`.
+async def known_buildings(db: AsyncSession) -> list[str]:
+    rows = (
+        await db.execute(
+            select(Complaint.location_building)
+            .where(Complaint.location_building.isnot(None))
+            .distinct()
+        )
+    ).scalars().all()
+    return [r for r in rows if r]
 
-    This — not the raw question or a long instruction block — is what gets
-    handed to `AIProvider.understand_complaint` as the "description" to
-    summarize. Two reasons to keep it data-first and compact:
 
-    - `MockProvider.understand_complaint`'s summary is a naive prefix
-      truncation of its input (it's a complaint summarizer, not a general
-      chat model) — putting the actual facts (counts, categories,
-      buildings, the top match) in the first ~180 characters means the
-      mock path still produces a genuinely informative answer instead of
-      echoing back instruction text.
-    - For `GeminiProvider`, a compact, fact-dense input is also just a
-      better summarization prompt than a long wall of instructions.
+# Order in which filters are given up when a question matches nothing, most
+# speculative first. Inferring a category from a loose synonym is the guess
+# most likely to be wrong; a building name the admin typed verbatim is the
+# one least likely to be, so it is never dropped.
+_RELAXATION_ORDER: tuple[tuple[str, str], ...] = (
+    ("safety_only", "the safety-only filter"),
+    ("category_slugs", "the category filter"),
+    ("window_days", "the time window"),
+    ("statuses", "the status filter"),
+    ("recurring_only", "the recurring-only filter"),
+)
+
+
+async def _fetch_with_relaxation(
+    db: AsyncSession, filters: QueryFilters
+) -> tuple[list[dict[str, Any]], QueryFilters, list[str]]:
+    """Fetch rows, progressively dropping the most speculative filters.
+
+    A question like "which building has the most urgent recurring problems?"
+    can parse into several filters at once and AND itself down to nothing,
+    which is a useless answer to a reasonable question. Rather than give up,
+    widen one filter at a time and tell the caller what was given up, so the
+    admin sees "no recurring wifi issues; here are the recurring issues
+    across all categories" instead of a dead end. Honest, and far more useful
+    than a bare zero.
     """
-    categories = sorted({c.get("category_slug", "other") for c in matches})
-    buildings = sorted(
-        {c.get("location_building") for c in matches if c.get("location_building")}
-    )
-    safety_count = sum(1 for c in matches if c.get("safety_flag"))
-    top = matches[0]  # matches are pre-sorted by priority_score, descending
-    top_summary = (top.get("ai_summary") or top.get("raw_description") or "").strip()
-    top_summary = " ".join(top_summary.split())[:120]
+    records = await fetch_records(db, filters)
+    if records:
+        return records, filters, []
 
-    parts = [f'{len(matches)} complaint(s) match "{question}"']
-    if categories:
-        parts.append(f"across {', '.join(categories)}")
-    if buildings:
-        parts.append(f"in {', '.join(buildings)}")
-    if safety_count:
-        parts.append(f"({safety_count} flagged for safety)")
-    blurb = ", ".join(parts) + "."
-    if top_summary:
-        blurb += f" Top match: {top_summary}"
-    return blurb
+    relaxed = replace(filters)
+    dropped: list[str] = []
+    empty = QueryFilters()
+
+    for attribute, description in _RELAXATION_ORDER:
+        if getattr(relaxed, attribute) == getattr(empty, attribute):
+            continue  # not set, nothing to drop
+        setattr(relaxed, attribute, getattr(empty, attribute))
+        dropped.append(description)
+
+        records = await fetch_records(db, relaxed)
+        if records:
+            return records, relaxed, dropped
+
+    return [], relaxed, dropped
 
 
 async def answer_admin_question(
-    question: str,
-    complaints: list[dict[str, Any]],
-    *,
-    provider: AIProvider | None = None,
+    db: AsyncSession, question: str, *, provider: AIProvider | None = None
 ) -> dict:
-    """Answer one admin natural-language question over `complaints`.
+    """Answer one admin question, grounded in real rows.
 
-    Args:
-        question: free-text admin question, e.g. "what's going on with
-            wifi in Block C" or "any safety issues this week?".
-        complaints: list of complaint dicts (already fetched by the
-            caller — this function does not touch the DB). Expected to
-            look like the API's `Complaint` shape (`apps/web/src/lib/
-            api.ts`), but only reads fields defensively via `.get()`, so a
-            partial dict (e.g. missing `ai_summary`) won't crash it.
-        provider: override for `get_provider()`, for tests.
-
-    Returns:
-        `{"answer": str, "cited_complaint_ids": list[str]}` — every id in
-        `cited_complaint_ids` is guaranteed to be an id of a complaint that
-        was actually in the filtered match set (never hallucinated),
-        regardless of what the model returns, because the ids are
-        cross-checked against the match set after the call.
+    Returns `{"answer", "cited_complaint_ids", "filters", "matched_count"}`.
+    Every id in `cited_complaint_ids` is guaranteed to belong to a complaint
+    that was actually in the filtered result set.
     """
-    if not complaints:
-        return _no_match_answer(question)
+    requested = extract_filters(question, await known_buildings(db))
+    records, filters, dropped = await _fetch_with_relaxation(db, requested)
 
-    matches = _filter_complaints(question, complaints)
-    if not matches:
-        return _no_match_answer(question)
+    if not records:
+        return {
+            "answer": (
+                "No complaints match that question "
+                f"({requested.describe()}). Try a different category "
+                f"({', '.join(CATEGORY_SLUGS)}), another building, or a "
+                "longer time window."
+            ),
+            "cited_complaint_ids": [],
+            "filters": requested.describe(),
+            "matched_count": 0,
+        }
 
-    matched_ids = {str(c.get("id")) for c in matches if c.get("id") is not None}
-    prompt_matches = matches[:_MAX_MATCHES_FOR_PROMPT]
-
-    blurb = _build_data_blurb(question, prompt_matches)
+    shown = records[:_MAX_RECORDS_TO_MODEL]
+    allowed_ids = {r["id"] for r in shown}
 
     ai = provider or get_provider()
-    understanding = await ai.understand_complaint(blurb, None)
-    answer_text = understanding.summary or (
-        f"Found {len(matches)} matching complaint(s)."
+    result = await ai.answer_question(
+        question,
+        shown,
+        schema_hint=(
+            f"These are the {len(shown)} highest-priority of {len(records)} "
+            f"complaints matching: {filters.describe()}."
+        ),
     )
 
-    # Cite every matched id shown to the model, capped to what was in the
-    # prompt — cheap and never hallucinates, since it's not parsed out of
-    # free text the model wrote. A future pass could ask the provider for
-    # an explicit `cited_ids` field the same way `understand_complaint`
-    # asks for structured fields, and intersect that with `matched_ids`.
-    cited_ids = [c.get("id") for c in prompt_matches if c.get("id") is not None]
-    cited_ids = [cid for cid in cited_ids if str(cid) in matched_ids]
+    answer = (result.get("answer") or "").strip()
+    if not answer:
+        answer = f"Found {len(records)} matching complaint(s) ({filters.describe()})."
 
-    return {"answer": answer_text, "cited_complaint_ids": cited_ids}
+    if dropped:
+        # Never let a widened search pass as an exact one.
+        answer = (
+            f"Nothing matched exactly, so I relaxed {', '.join(dropped)}. "
+            f"{answer}"
+        )
+
+    # The grounding guarantee: intersect, preserving the model's ordering,
+    # and fall back to the rows we showed it if it cited nothing usable.
+    cited = [str(c) for c in result.get("cited_complaint_ids", [])]
+    cited = [c for c in dict.fromkeys(cited) if c in allowed_ids]
+    if not cited:
+        cited = [r["id"] for r in shown[:5]]
+
+    description = filters.describe()
+    if dropped:
+        description += f" (relaxed: {', '.join(dropped)})"
+
+    return {
+        "answer": answer,
+        "cited_complaint_ids": cited,
+        "filters": description,
+        "matched_count": len(records),
+    }

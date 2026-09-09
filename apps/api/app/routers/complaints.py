@@ -1,24 +1,23 @@
-"""CRUD + AI-pipeline-integrated router for `complaints`.
+"""HTTP surface for complaints.
 
-This is Track A's original CRUD skeleton with the intelligence pipeline
-wired in at integration time: `POST /complaints` now calls
-`app.pipeline.understand.process_new_complaint` (Track B), assigns a
-category/department from the returned understanding, joins-or-creates a
-`complaint_clusters` row when the pipeline says "duplicate", and persists
-the embedding. `priority_score`/`priority_breakdown` are recomputed live on
-every read (see `_to_read_model`) rather than frozen at create time, so the
-SLA-age term keeps rising the longer a complaint sits open — a nice side
-effect of CLAUDE.md's formula being cheap and pure, not extra work.
+Thin on purpose: the intelligence lives in `app/pipeline/intake.py`, and
+this module's job is to validate input, call it, publish a realtime event,
+and serialize the result into the shape `apps/web/src/lib/api.ts` expects.
 
-`GET /complaints` (list) and `GET /complaints/{id}` return the shape
-`apps/web/src/lib/api.ts`'s `Complaint` type expects.
+One serialization note that matters. The stored `priority_*` columns are the
+source of truth for the four breakdown segments, but the SLA-age term keeps
+climbing while a complaint sits open and nothing recomputes it between
+writes. `_to_read_model` therefore refreshes just that one term at read time
+and adjusts the total to match, so an admin watching the dashboard sees an
+ageing complaint actually rise. The other three terms are read straight from
+the database — they only change when something real changes (a merge, a
+re-classification), and those paths already write them.
 """
 
 from __future__ import annotations
 
-import base64
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from enum import Enum
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -27,12 +26,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.ai.schemas import CATEGORY_SLUGS
 from app.config import get_settings
 from app.db.database import get_db
-from app.db.models import Category, Complaint, ComplaintCluster, ComplaintEmbedding, StatusEvent
-from app.pipeline import priority as priority_pipeline
-from app.pipeline.understand import process_new_complaint
+from app.db.models import Complaint, StatusEvent
+from app.deps import require_admin
+from app.pipeline import priority as priority_math
+from app.pipeline.intake import ingest_complaint, refresh_cluster
+from app.realtime import broadcaster
+from app.storage import InvalidPhotoError, decode_photo, save_photo
 
 router = APIRouter()
 
@@ -47,7 +48,12 @@ class ComplaintStatus(str, Enum):
 
 
 class PriorityBreakdown(BaseModel):
-    """Mirrors apps/web/src/lib/api.ts's PriorityBreakdown."""
+    """Mirrors apps/web/src/lib/api.ts's PriorityBreakdown.
+
+    Each field is the already-weighted contribution of one term, so the four
+    sum to `priority_score` and each is directly usable as one segment width
+    in the 4-segment bar.
+    """
 
     severity: float = 0.0
     frequency: float = 0.0
@@ -56,34 +62,34 @@ class PriorityBreakdown(BaseModel):
 
 
 class ComplaintCreate(BaseModel):
-    """Mirrors apps/web/src/lib/api.ts's CreateComplaintInput.
-
-    `student_id` is intentionally *not* in that frontend type (no auth in
-    this slice) — optional here, defaults to "anonymous".
-    """
-
-    description: str = Field(..., min_length=1)
+    description: str = Field(..., min_length=1, max_length=5000)
     location_building: str = Field(..., min_length=1, max_length=255)
     location_room: str | None = Field(default=None, max_length=64)
     photo_base64: str | None = None
+    # Free-text reporter identity. Optional: leave it out and the complaint
+    # is anonymous, which counts as a distinct reporter rather than being
+    # lumped in with every other anonymous report.
     student_id: str | None = Field(default=None, max_length=255)
 
 
 class ComplaintStatusUpdate(BaseModel):
     status: ComplaintStatus
-    note: str | None = None
-    actor: str | None = None
+    note: str | None = Field(default=None, max_length=2000)
+    actor: str | None = Field(default=None, max_length=255)
 
 
 class ComplaintRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
+    student_id: str | None
     raw_description: str
     photo_url: str | None
+    photo_matches_text: bool | None
     location_building: str | None
     location_room: str | None
     category_slug: str | None
+    department_id: uuid.UUID | None
     department_name: str | None
     severity: int | None
     safety_flag: bool
@@ -91,13 +97,28 @@ class ComplaintRead(BaseModel):
     priority_breakdown: PriorityBreakdown
     status: ComplaintStatus
     ai_summary: str | None
+    cluster_id: uuid.UUID | None
     is_recurring: bool
     cluster_member_count: int
+    independent_student_count: int
+    suggested_match_complaint_id: uuid.UUID | None
+    suggested_similarity: float | None
+    department_overridden: bool
+    created_at: datetime
+
+
+class StatusEventRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    status: ComplaintStatus
+    note: str | None
+    actor: str | None
     created_at: datetime
 
 
 # Eager-load every relation `_to_read_model` touches — async SQLAlchemy
-# can't lazy-load after the session context ends.
+# cannot lazy-load once the session context has ended.
 _LOAD_OPTS = (
     selectinload(Complaint.category),
     selectinload(Complaint.department),
@@ -105,133 +126,77 @@ _LOAD_OPTS = (
 )
 
 
-def _age_hours(created_at: datetime) -> float:
-    now = datetime.now(timezone.utc)
+def _age_hours(created_at: datetime | None) -> float:
+    if created_at is None:
+        return 0.0
     created = created_at if created_at.tzinfo else created_at.replace(tzinfo=timezone.utc)
-    return max(0.0, (now - created).total_seconds() / 3600)
+    return max(0.0, (datetime.now(timezone.utc) - created).total_seconds() / 3600)
 
 
 def _to_read_model(complaint: Complaint) -> ComplaintRead:
-    cluster_size = complaint.cluster.member_count if complaint.cluster else 1
-    result = priority_pipeline.compute_priority(
-        severity=complaint.severity or 1,
-        cluster_size=cluster_size,
-        safety_flag=complaint.safety_flag,
-        age_hours=_age_hours(complaint.created_at),
-    )
+    settings = get_settings()
 
+    # Only the SLA term is time-dependent; refresh it at read time so an
+    # ageing complaint visibly climbs without a background job.
+    sla_term = priority_math.SLA_AGE_WEIGHT * priority_math.sla_age_factor(
+        _age_hours(complaint.created_at), settings.sla_saturation_hours
+    )
+    breakdown = PriorityBreakdown(
+        severity=complaint.priority_severity or 0.0,
+        frequency=complaint.priority_frequency or 0.0,
+        safety=complaint.priority_safety or 0.0,
+        sla_age=sla_term,
+    )
+    total = breakdown.severity + breakdown.frequency + breakdown.safety + breakdown.sla_age
+
+    cluster = complaint.cluster
     return ComplaintRead(
         id=complaint.id,
+        student_id=complaint.student_id,
         raw_description=complaint.raw_description,
         photo_url=complaint.photo_url,
+        photo_matches_text=complaint.photo_matches_text,
         location_building=complaint.location_building,
         location_room=complaint.location_room,
         category_slug=complaint.category.slug if complaint.category else None,
+        department_id=complaint.department_id,
         department_name=complaint.department.name if complaint.department else None,
         severity=complaint.severity,
         safety_flag=complaint.safety_flag,
-        priority_score=result.priority_score,
-        priority_breakdown=PriorityBreakdown(**result.breakdown.as_dict()),
+        priority_score=total,
+        priority_breakdown=breakdown,
         status=ComplaintStatus(complaint.status),
         ai_summary=complaint.ai_summary,
-        is_recurring=bool(complaint.cluster and complaint.cluster.is_recurring),
-        cluster_member_count=complaint.cluster.member_count if complaint.cluster else 0,
+        cluster_id=complaint.cluster_id,
+        is_recurring=bool(cluster and cluster.is_recurring),
+        cluster_member_count=cluster.member_count if cluster else 1,
+        independent_student_count=cluster.independent_student_count if cluster else 1,
+        suggested_match_complaint_id=complaint.suggested_match_complaint_id,
+        suggested_similarity=complaint.suggested_similarity,
+        department_overridden=complaint.department_overridden,
         created_at=complaint.created_at,
     )
 
 
 async def _get_complaint_or_404(complaint_id: uuid.UUID, db: AsyncSession) -> Complaint:
-    stmt = select(Complaint).options(*_LOAD_OPTS).where(Complaint.id == complaint_id)
-    result = await db.execute(stmt)
-    complaint = result.scalar_one_or_none()
+    # `populate_existing` matters here, and its absence was a real bug. The
+    # session is configured with `expire_on_commit=False`, so after a write
+    # the identity map still holds the object with its previously-loaded
+    # relationships — and SQLAlchemy will not overwrite already-loaded
+    # attributes on a re-query without being told to. Re-reading a complaint
+    # straight after re-routing it therefore returned the *old* department.
+    # Every mutating route re-reads through this function, so forcing a
+    # refresh here fixes the whole class of staleness at once.
+    stmt = (
+        select(Complaint)
+        .options(*_LOAD_OPTS)
+        .where(Complaint.id == complaint_id)
+        .execution_options(populate_existing=True)
+    )
+    complaint = (await db.execute(stmt)).scalar_one_or_none()
     if complaint is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Complaint not found")
     return complaint
-
-
-def _decode_photo_bytes(photo_base64: str | None) -> bytes | None:
-    """Best-effort decode of a (possibly data-URL-prefixed) base64 photo.
-
-    Returns None on anything malformed rather than raising — a bad photo
-    payload shouldn't block understanding the text description.
-    """
-    if not photo_base64:
-        return None
-    raw = photo_base64.split(",", 1)[1] if "," in photo_base64 else photo_base64
-    try:
-        return base64.b64decode(raw)
-    except Exception:
-        return None
-
-
-async def _candidate_embeddings(
-    db: AsyncSession, location_building: str
-) -> list[tuple[str, list[float]]]:
-    """Existing embeddings to compare a new complaint against.
-
-    Scoped per CLAUDE.md: same building + rolling 14-day window. Category
-    scoping is deliberately skipped here (see app/pipeline/understand.py's
-    module docstring) — the AI-derived category isn't known until *after*
-    this query runs.
-    """
-    window_start = datetime.now(timezone.utc) - timedelta(days=14)
-    stmt = (
-        select(Complaint.id, ComplaintEmbedding.embedding)
-        .join(ComplaintEmbedding, ComplaintEmbedding.complaint_id == Complaint.id)
-        .where(
-            Complaint.location_building == location_building,
-            Complaint.created_at >= window_start,
-        )
-    )
-    rows = (await db.execute(stmt)).all()
-    return [(str(cid), list(embedding)) for cid, embedding in rows]
-
-
-async def _assign_cluster(
-    db: AsyncSession,
-    *,
-    new_complaint: Complaint,
-    category: Category | None,
-    similarity: dict,
-) -> ComplaintCluster | None:
-    """Join an existing cluster or start a new one when the pipeline found a duplicate.
-
-    Only "duplicate" (>=0.92 cosine, per CLAUDE.md) auto-merges. A
-    "suggested_merge" (0.75-0.92) is intentionally left unclustered here —
-    that's meant to be surfaced to an admin for a one-click merge, which is
-    a frontend feature not built in this pass (flagged as a stretch goal).
-    """
-    if similarity.get("label") != "duplicate" or similarity.get("best_match_id") is None:
-        return None
-
-    match_id = uuid.UUID(similarity["best_match_id"])
-    match_complaint = await db.get(Complaint, match_id)
-    if match_complaint is None:
-        return None
-
-    settings = get_settings()
-
-    if match_complaint.cluster_id is not None:
-        cluster_row = await db.get(ComplaintCluster, match_complaint.cluster_id)
-        if cluster_row is None:
-            return None
-        cluster_row.member_count += 1
-        cluster_row.last_seen = new_complaint.created_at
-        if cluster_row.member_count >= settings.recurring_threshold:
-            cluster_row.is_recurring = True
-        return cluster_row
-
-    cluster_row = ComplaintCluster(
-        category_id=(category.id if category else match_complaint.category_id),
-        location_building=new_complaint.location_building,
-        representative_complaint_id=match_complaint.id,
-        member_count=2,
-        is_recurring=2 >= settings.recurring_threshold,
-    )
-    db.add(cluster_row)
-    await db.flush()
-    match_complaint.cluster_id = cluster_row.id
-    return cluster_row
 
 
 # --- Routes ----------------------------------------------------------
@@ -240,14 +205,40 @@ async def _assign_cluster(
 @router.get("", response_model=list[ComplaintRead])
 async def list_complaints(
     status_filter: ComplaintStatus | None = Query(default=None, alias="status"),
+    category: str | None = Query(default=None, max_length=64),
+    building: str | None = Query(default=None, max_length=255),
+    recurring_only: bool = Query(default=False),
+    limit: int = Query(default=500, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
 ) -> list[ComplaintRead]:
-    stmt = select(Complaint).options(*_LOAD_OPTS).order_by(Complaint.created_at.desc())
+    """Priority-sorted complaint list, with the filters the dashboard needs.
+
+    Filtering happens in SQL rather than in the browser so the dashboard
+    stays responsive as the table grows, and so "Ask CampusPluse" and the
+    dashboard agree on what a filter means.
+    """
+    stmt = select(Complaint).options(*_LOAD_OPTS)
     if status_filter is not None:
         stmt = stmt.where(Complaint.status == status_filter.value)
+    if category:
+        from app.db.models import Category
 
-    result = await db.execute(stmt)
-    complaints = result.scalars().all()
+        stmt = stmt.join(Category, Complaint.category_id == Category.id).where(
+            Category.slug == category
+        )
+    if building:
+        stmt = stmt.where(Complaint.location_building == building)
+    if recurring_only:
+        from app.db.models import ComplaintCluster
+
+        stmt = stmt.join(
+            ComplaintCluster, Complaint.cluster_id == ComplaintCluster.id
+        ).where(ComplaintCluster.is_recurring.is_(True))
+
+    stmt = stmt.order_by(Complaint.priority_score.desc(), Complaint.created_at.desc()).limit(
+        limit
+    )
+    complaints = (await db.execute(stmt)).scalars().all()
     return [_to_read_model(c) for c in complaints]
 
 
@@ -255,88 +246,82 @@ async def list_complaints(
 async def get_complaint(
     complaint_id: uuid.UUID, db: AsyncSession = Depends(get_db)
 ) -> ComplaintRead:
-    complaint = await _get_complaint_or_404(complaint_id, db)
-    return _to_read_model(complaint)
+    return _to_read_model(await _get_complaint_or_404(complaint_id, db))
+
+
+@router.get("/{complaint_id}/events", response_model=list[StatusEventRead])
+async def list_status_events(
+    complaint_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+) -> list[StatusEvent]:
+    """Audit trail for one complaint, oldest first — the student's timeline."""
+    await _get_complaint_or_404(complaint_id, db)
+    stmt = (
+        select(StatusEvent)
+        .where(StatusEvent.complaint_id == complaint_id)
+        .order_by(StatusEvent.created_at.asc())
+    )
+    return list((await db.execute(stmt)).scalars().all())
 
 
 @router.post("", response_model=ComplaintRead, status_code=status.HTTP_201_CREATED)
 async def create_complaint(
     payload: ComplaintCreate, db: AsyncSession = Depends(get_db)
 ) -> ComplaintRead:
-    # Photo storage (bucket/CDN upload) is out of scope for this scaffold —
-    # kept verbatim as photo_url so the field round-trips end to end.
-    photo_url = payload.photo_base64 or None
+    """Submit a complaint and run the full intelligence pipeline on it."""
+    try:
+        decoded = decode_photo(payload.photo_base64)
+    except InvalidPhotoError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
 
-    complaint = Complaint(
-        student_id=payload.student_id or "anonymous",
-        raw_description=payload.description,
-        photo_url=photo_url,
+    image_bytes: bytes | None = None
+    photo_url: str | None = None
+    if decoded is not None:
+        image_bytes, extension, _mime = decoded
+        photo_url = save_photo(image_bytes, extension)
+
+    result = await ingest_complaint(
+        db,
+        description=payload.description,
         location_building=payload.location_building,
         location_room=payload.location_room,
-        category_id=None,
-        department_id=None,
-        severity=None,
-        safety_flag=False,
-        priority_score=0.0,
-        status=ComplaintStatus.open.value,
+        student_id=payload.student_id,
+        photo_url=photo_url,
+        image_bytes=image_bytes,
     )
-    db.add(complaint)
-    await db.flush()  # populate complaint.id (server-generated UUID) + created_at default
-
-    # --- AI pipeline: understand + embed + similarity + priority --------
-    candidates = await _candidate_embeddings(db, payload.location_building)
-    pipeline_result = await process_new_complaint(
-        description=payload.description,
-        image_bytes=_decode_photo_bytes(payload.photo_base64),
-        existing_embeddings=candidates,
-    )
-    understanding = pipeline_result["understanding"]
-    similarity = pipeline_result["similarity"]
-
-    category_row: Category | None = None
-    if understanding.get("category") in CATEGORY_SLUGS:
-        category_row = (
-            await db.execute(select(Category).where(Category.slug == understanding["category"]))
-        ).scalar_one_or_none()
-
-    cluster_row = await _assign_cluster(
-        db, new_complaint=complaint, category=category_row, similarity=similarity
-    )
-
-    complaint.category_id = category_row.id if category_row else None
-    complaint.department_id = category_row.default_department_id if category_row else None
-    complaint.severity = understanding.get("severity")
-    complaint.safety_flag = bool(understanding.get("safety_flag"))
-    complaint.ai_summary = understanding.get("summary")
-    if cluster_row is not None:
-        complaint.cluster_id = cluster_row.id
-        complaint.priority_score = priority_pipeline.compute_priority(
-            severity=complaint.severity or 1,
-            cluster_size=cluster_row.member_count,
-            safety_flag=complaint.safety_flag,
-            age_hours=0.0,
-        ).priority_score
-    else:
-        complaint.priority_score = pipeline_result["priority"]["priority_score"]
-
-    db.add(
-        ComplaintEmbedding(complaint_id=complaint.id, embedding=pipeline_result["embedding"])
-    )
-    db.add(
-        StatusEvent(
-            complaint_id=complaint.id,
-            status=complaint.status,
-            note="Complaint submitted",
-            actor=complaint.student_id,
-        )
-    )
-
     await db.commit()
-    complaint = await _get_complaint_or_404(complaint.id, db)
-    return _to_read_model(complaint)
+
+    complaint = await _get_complaint_or_404(result.complaint.id, db)
+    read_model = _to_read_model(complaint)
+
+    # --- realtime ---------------------------------------------------------
+    broadcaster.publish(
+        "complaint.created",
+        {
+            "complaint": read_model.model_dump(mode="json"),
+            "similarity_label": result.similarity_label,
+            "best_match_id": str(result.best_match_id) if result.best_match_id else None,
+            "best_match_score": result.best_match_score,
+        },
+    )
+    if result.cluster is not None:
+        broadcaster.publish(
+            "cluster.recurring" if result.became_recurring else "cluster.updated",
+            {
+                "cluster_id": str(result.cluster.id),
+                "member_count": result.cluster.member_count,
+                "independent_student_count": result.cluster.independent_student_count,
+                "is_recurring": result.cluster.is_recurring,
+                "location_building": result.cluster.location_building,
+            },
+        )
+    return read_model
 
 
-@router.patch("/{complaint_id}/status", response_model=ComplaintRead)
+@router.patch(
+    "/{complaint_id}/status",
+    response_model=ComplaintRead,
+    dependencies=[Depends(require_admin)],
+)
 async def update_complaint_status(
     complaint_id: uuid.UUID,
     payload: ComplaintStatusUpdate,
@@ -351,21 +336,39 @@ async def update_complaint_status(
             complaint_id=complaint.id,
             status=payload.status.value,
             note=payload.note,
-            actor=payload.actor,
+            actor=payload.actor or "admin",
         )
     )
+    # Resolving a complaint shrinks its cluster's live footprint, and
+    # `find_similar_complaints` excludes resolved rows — so the cluster has
+    # to be recounted or the leaderboard keeps advertising fixed problems.
+    if complaint.cluster is not None:
+        await refresh_cluster(db, complaint.cluster, settings=get_settings())
+
     await db.commit()
 
     complaint = await _get_complaint_or_404(complaint.id, db)
-    return _to_read_model(complaint)
+    read_model = _to_read_model(complaint)
+    broadcaster.publish("complaint.updated", {"complaint": read_model.model_dump(mode="json")})
+    return read_model
 
 
-@router.delete("/{complaint_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{complaint_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+    dependencies=[Depends(require_admin)],
+)
 async def delete_complaint(
     complaint_id: uuid.UUID, db: AsyncSession = Depends(get_db)
 ) -> None:
-    complaint = await db.get(Complaint, complaint_id)
-    if complaint is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Complaint not found")
+    complaint = await _get_complaint_or_404(complaint_id, db)
+
+    cluster = complaint.cluster
     await db.delete(complaint)
+    await db.flush()
+    if cluster is not None:
+        await refresh_cluster(db, cluster, settings=get_settings())
     await db.commit()
+
+    broadcaster.publish("complaint.updated", {"deleted_id": str(complaint_id)})

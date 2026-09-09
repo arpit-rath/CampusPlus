@@ -13,6 +13,7 @@ import math
 
 import pytest
 
+from app.pipeline import cluster
 from app.pipeline.cluster import (
     DUPLICATE_THRESHOLD,
     SUGGESTED_MERGE_THRESHOLD,
@@ -214,3 +215,38 @@ def test_cluster_embeddings_every_id_appears_exactly_once():
     all_ids = [item_id for group in clusters for item_id in group]
     assert sorted(all_ids) == ["a", "b", "c", "d", "e"]
     assert len(all_ids) == len(set(all_ids))
+
+
+# --- independent-student counting ----------------------------------------
+#
+# CLAUDE.md's recurring rule counts *students*, not submissions. These pin
+# the anti-gaming property: one person cannot manufacture a recurring issue.
+
+
+def test_independent_students_counts_distinct_reporters():
+    members = [("c1", "student_1"), ("c2", "student_2"), ("c3", "student_3")]
+    assert cluster.count_independent_students(members) == 3
+
+
+def test_one_student_submitting_repeatedly_counts_once():
+    members = [("c1", "student_1"), ("c2", "student_1"), ("c3", "student_1")]
+    assert cluster.count_independent_students(members) == 1
+
+
+def test_mixed_repeat_and_distinct_reporters():
+    members = [
+        ("c1", "student_1"),
+        ("c2", "student_1"),
+        ("c3", "student_2"),
+        ("c4", "student_3"),
+    ]
+    assert cluster.count_independent_students(members) == 3
+
+
+def test_anonymous_reports_each_count_as_their_own_reporter():
+    members = [("c1", None), ("c2", None), ("c3", None)]
+    assert cluster.count_independent_students(members) == 3
+
+
+def test_empty_cluster_has_no_independent_students():
+    assert cluster.count_independent_students([]) == 0

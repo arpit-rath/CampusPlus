@@ -36,3 +36,19 @@ pgdata/
 
 # Claude worktrees (local only, never pushed)
 .claude/worktrees/
+
+# Local dev database created by scripts/dev_db.py (a whole Postgres cluster)
+.devdb/
+
+# Complaint photos written by the API at runtime — user data, never committed
+apps/api/uploads/
+
+# Next.js incremental typecheck cache
+apps/web/tsconfig.tsbuildinfo
+
+# Generated demo fixture. Regenerated in under a second by
+# `python scripts/seed_demo.py`, and it stores a 768-float embedding per
+# complaint (~270 KB) that is specific to whichever provider produced it —
+# committing it would bloat every diff with numbers that mean nothing once
+# the provider changes.
+scripts/demo_data.json

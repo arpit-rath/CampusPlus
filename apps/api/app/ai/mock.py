@@ -194,8 +194,69 @@ def _summarize(text: str, category: str) -> str:
     return f"{label.capitalize()} issue: {trimmed}"
 
 
+def _mock_answer(question: str, records: list[dict]) -> str:
+    """A genuinely informative, fully deterministic answer over `records`.
+
+    The mock has no language model, so instead of pretending to write prose
+    it reports the aggregates an admin actually asked about: how many
+    complaints matched, how they split by category and building, how many
+    are recurring or safety-flagged, and what the single highest-priority
+    one is. That is a real answer grounded in real rows — just phrased by a
+    template rather than by Gemini.
+    """
+    if not records:
+        return "No complaints in the current data match that question."
+
+    def _count(key: str) -> list[tuple[str, int]]:
+        tally: dict[str, int] = {}
+        for record in records:
+            value = record.get(key) or "unspecified"
+            tally[str(value)] = tally.get(str(value), 0) + 1
+        return sorted(tally.items(), key=lambda kv: (-kv[1], kv[0]))
+
+    categories = _count("category_slug")
+    buildings = _count("location_building")
+    recurring = sum(1 for r in records if r.get("is_recurring"))
+    safety = sum(1 for r in records if r.get("safety_flag"))
+    top = max(records, key=lambda r: r.get("priority_score") or 0.0)
+
+    sentences = [
+        f"{len(records)} complaint(s) match that question.",
+        "By category: "
+        + ", ".join(f"{slug} ({n})" for slug, n in categories[:4])
+        + ".",
+        "By location: "
+        + ", ".join(f"{name} ({n})" for name, n in buildings[:4])
+        + ".",
+    ]
+    if recurring:
+        sentences.append(f"{recurring} are part of a recurring cluster.")
+    if safety:
+        sentences.append(f"{safety} are flagged as a safety risk.")
+
+    top_summary = " ".join(
+        str(top.get("ai_summary") or top.get("raw_description") or "").split()
+    )[:140]
+    if top_summary:
+        sentences.append(
+            f"Highest priority ({(top.get('priority_score') or 0.0):.2f}) at "
+            f"{top.get('location_building') or 'an unspecified building'}: {top_summary}"
+        )
+    return " ".join(sentences)
+
+
 class MockProvider(AIProvider):
     """Deterministic fake `AIProvider` — no network calls."""
+
+    async def answer_question(
+        self, question: str, records: list[dict], schema_hint: str = ""
+    ) -> dict:
+        return {
+            "answer": _mock_answer(question, records),
+            "cited_complaint_ids": [
+                str(r["id"]) for r in records if r.get("id") is not None
+            ],
+        }
 
     async def understand_complaint(
         self, description: str, image_bytes: bytes | None

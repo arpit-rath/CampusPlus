@@ -1,242 +1,375 @@
-"""Basic CRUD tests for the complaints/departments/categories routers.
+"""HTTP-layer tests: the routes, their contracts, and admin access control.
 
-These hit a real Postgres+pgvector database (via `DATABASE_URL`, same as
-the app) rather than mocking the DB layer — there's no sqlite fallback
-here since `UUID` and `Vector` columns are Postgres/pgvector-specific.
-Run `docker compose up -d && alembic upgrade head` first so the schema
-and seed data (departments/categories) exist, then:
+These drive the real ASGI app against a real database, so they cover the
+things a unit test of the pipeline cannot: response shapes the frontend
+depends on, status codes, validation, and whether `ADMIN_TOKEN` is actually
+enforced.
 
-    cd apps/api && pytest tests/test_api_basic.py -v
-
-Each test runs inside an outer DB transaction that is rolled back in a
-fixture teardown, so nothing written by a test persists — the seeded
-departments/categories from the `0001_init` migration are relied on as
-read-only fixture data (never mutated here).
-
-This module was written without a working `pip install` in this
-environment (see CLAUDE.md's scaffold note) — it has been checked by
-careful reading, not by execution.
+Skips cleanly with an explanatory message when no database is reachable —
+see `conftest.py`.
 """
 
 from __future__ import annotations
 
-import uuid
+import base64
 from collections.abc import AsyncGenerator
 
 import pytest
 import pytest_asyncio
-from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.database import engine, get_db
-from app.routers import categories, complaints, departments
+from app.config import get_settings
+from app.db.database import get_db
+from app.main import app
 
+# Session-scoped loop: the app builds one module-level async engine, so
+# its pooled connections must never cross an event loop. See conftest.py.
+pytestmark = pytest.mark.asyncio(loop_scope="session")
 
-def _build_test_app() -> FastAPI:
-    """A standalone app wired to our three routers.
-
-    `app.main` only wires up routers during the integration pass (see the
-    commented-out block there), so tests build their own minimal app
-    instead of depending on that having happened yet.
-    """
-    test_app = FastAPI()
-    test_app.include_router(complaints.router, prefix="/complaints", tags=["complaints"])
-    test_app.include_router(departments.router, prefix="/departments", tags=["departments"])
-    test_app.include_router(categories.router, prefix="/categories", tags=["categories"])
-    return test_app
+PNG = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"\x00" * 64).decode()
 
 
-@pytest_asyncio.fixture
-async def db_session() -> AsyncGenerator[AsyncSession, None]:
-    """One AsyncSession per test, wrapped in a transaction that is always
-    rolled back — the standard SQLAlchemy 2.0 "join an external
-    transaction" pattern for isolated test writes. Router code calling
-    `db.commit()` commits a savepoint, not the outer transaction, so
-    nothing escapes this test.
-    """
-    async with engine.connect() as conn:
-        outer_txn = await conn.begin()
-        session = AsyncSession(
-            bind=conn, expire_on_commit=False, join_transaction_mode="create_savepoint"
-        )
-        try:
-            yield session
-        finally:
-            await session.close()
-            await outer_txn.rollback()
+@pytest_asyncio.fixture(loop_scope="session")
+async def client(clean_db) -> AsyncGenerator[AsyncClient, None]:
+    """An HTTP client wired to the app, sharing the test's own session."""
+
+    async def _override_get_db():
+        yield clean_db
+
+    app.dependency_overrides[get_db] = _override_get_db
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as http:
+            yield http
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
 
-@pytest_asyncio.fixture
-async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
-    app = _build_test_app()
-
-    async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
-        yield db_session
-
-    app.dependency_overrides[get_db] = override_get_db
-
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        yield ac
+# --- system ---------------------------------------------------------------
 
 
-# --- Seed data -------------------------------------------------------------
+async def test_health_reports_configuration_honestly():
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as http:
+        response = await http.get("/health")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ok"
+    # The point of these fields: nobody should have to guess whether a demo
+    # is really hitting Gemini, or whether the admin API is open.
+    assert body["llm_effective"] in {"gemini", "mock"}
+    assert body["admin_auth"] in {"enabled", "disabled"}
+    assert body["thresholds"]["duplicate"] == get_settings().duplicate_threshold
 
 
-@pytest.mark.asyncio
-async def test_seeded_categories_and_departments(client: AsyncClient) -> None:
-    cat_resp = await client.get("/categories")
-    assert cat_resp.status_code == 200
-    slugs = {c["slug"] for c in cat_resp.json()}
+# --- reference data -------------------------------------------------------
+
+
+async def test_seeded_departments_and_categories_are_served(client):
+    departments = (await client.get("/departments")).json()
+    categories = (await client.get("/categories")).json()
+
+    assert len(departments) >= 5
+    slugs = {c["slug"] for c in categories}
     assert {"wifi", "electrical", "sanitation", "infrastructure", "academics", "other"} <= slugs
 
-    dept_resp = await client.get("/departments")
-    assert dept_resp.status_code == 200
-    names = {d["name"] for d in dept_resp.json()}
-    assert "IT & Network" in names
-    assert "Facilities" in names
+
+# --- complaint creation ---------------------------------------------------
 
 
-# --- Complaints CRUD ---------------------------------------------------
+async def test_create_complaint_returns_the_full_frontend_contract(client):
+    response = await client.post(
+        "/complaints",
+        json={
+            "description": "The wifi is completely down in Innovation Hall, nobody can connect.",
+            "location_building": "Innovation Hall",
+            "location_room": "204",
+            "student_id": "student_a",
+        },
+    )
+    assert response.status_code == 201
+    body = response.json()
 
+    # Every field apps/web/src/lib/api.ts reads.
+    for field in (
+        "id", "raw_description", "photo_url", "photo_matches_text",
+        "location_building", "location_room", "category_slug", "department_name",
+        "severity", "safety_flag", "priority_score", "priority_breakdown",
+        "status", "ai_summary", "cluster_id", "is_recurring",
+        "cluster_member_count", "independent_student_count", "created_at",
+    ):
+        assert field in body, f"missing {field} from the complaint contract"
 
-@pytest.mark.asyncio
-async def test_create_complaint_defaults_to_open_and_unassigned(client: AsyncClient) -> None:
-    payload = {
-        "description": "WiFi is down across the whole 3rd floor of the library.",
-        "location_building": "Library",
-        "location_room": "3F",
-    }
-    resp = await client.post("/complaints", json=payload)
-    assert resp.status_code == 201
-
-    body = resp.json()
-    assert body["raw_description"] == payload["description"]
-    assert body["location_building"] == "Library"
+    assert body["category_slug"] == "wifi"
+    assert body["department_name"], "a categorized complaint must be routed"
     assert body["status"] == "open"
-    # No AI pipeline has run against this row (that's Track B's job) — so
-    # it should come back unassigned/zeroed, not guessed at here.
-    assert body["category_slug"] is None
-    assert body["department_name"] is None
-    assert body["severity"] is None
-    assert body["safety_flag"] is False
-    assert body["priority_score"] == 0.0
-    assert body["priority_breakdown"] == {
-        "severity": 0.0,
-        "frequency": 0.0,
-        "safety": 0.0,
-        "sla_age": 0.0,
-    }
-    assert body["is_recurring"] is False
-    assert body["cluster_member_count"] == 0
-    assert uuid.UUID(body["id"])  # a real UUID came back
+    assert set(body["priority_breakdown"]) == {"severity", "frequency", "safety", "sla_age"}
+    assert body["priority_score"] == pytest.approx(
+        sum(body["priority_breakdown"].values()), abs=1e-6
+    )
 
 
-@pytest.mark.asyncio
-async def test_create_complaint_requires_location_building(client: AsyncClient) -> None:
-    resp = await client.post("/complaints", json={"description": "No location given"})
-    assert resp.status_code == 422
+async def test_create_complaint_rejects_empty_description(client):
+    response = await client.post(
+        "/complaints", json={"description": "", "location_building": "Innovation Hall"}
+    )
+    assert response.status_code == 422
 
 
-@pytest.mark.asyncio
-async def test_get_complaint_roundtrip(client: AsyncClient) -> None:
-    create_resp = await client.post(
+async def test_create_complaint_requires_a_building(client):
+    response = await client.post("/complaints", json={"description": "something broke"})
+    assert response.status_code == 422
+
+
+async def test_create_complaint_stores_a_valid_photo(client):
+    response = await client.post(
         "/complaints",
-        json={"description": "Broken tube light", "location_building": "Block C"},
+        json={
+            "description": "Sparking wires near the panel.",
+            "location_building": "Hostel Block B",
+            "photo_base64": f"data:image/png;base64,{PNG}",
+        },
     )
-    complaint_id = create_resp.json()["id"]
-
-    get_resp = await client.get(f"/complaints/{complaint_id}")
-    assert get_resp.status_code == 200
-    assert get_resp.json()["id"] == complaint_id
-
-
-@pytest.mark.asyncio
-async def test_get_complaint_404_for_unknown_id(client: AsyncClient) -> None:
-    resp = await client.get(f"/complaints/{uuid.uuid4()}")
-    assert resp.status_code == 404
+    assert response.status_code == 201
+    body = response.json()
+    # A URL, not a giant base64 blob echoed back into the row.
+    assert body["photo_url"].startswith("/uploads/")
+    assert len(body["photo_url"]) < 100
+    assert body["photo_matches_text"] is not None
 
 
-@pytest.mark.asyncio
-async def test_list_complaints_status_filter(client: AsyncClient) -> None:
-    open_resp = await client.post(
+async def test_create_complaint_rejects_a_non_image_attachment(client):
+    response = await client.post(
         "/complaints",
-        json={"description": "Leaking tap", "location_building": "Hostel A"},
+        json={
+            "description": "Sparking wires near the panel.",
+            "location_building": "Hostel Block B",
+            "photo_base64": "data:image/png;base64,"
+            + base64.b64encode(b"<html>not an image</html>").decode(),
+        },
     )
-    to_resolve_resp = await client.post(
+    assert response.status_code == 422
+    assert "image" in response.json()["detail"]
+
+
+async def test_complaint_without_a_photo_has_null_photo_verification(client):
+    """NULL means "no photo", which is not the same as "photo did not match"."""
+    body = (
+        await client.post(
+            "/complaints",
+            json={"description": "Broken chair in LH-3.", "location_building": "Academic Block A"},
+        )
+    ).json()
+    assert body["photo_url"] is None
+    assert body["photo_matches_text"] is None
+
+
+# --- reading --------------------------------------------------------------
+
+
+async def test_get_complaint_and_its_event_timeline(client):
+    created = (
+        await client.post(
+            "/complaints",
+            json={"description": "Toilets clogged on the 2nd floor.", "location_building": "Science Block"},
+        )
+    ).json()
+
+    fetched = await client.get(f"/complaints/{created['id']}")
+    assert fetched.status_code == 200
+    assert fetched.json()["id"] == created["id"]
+
+    events = (await client.get(f"/complaints/{created['id']}/events")).json()
+    assert len(events) == 1
+    assert events[0]["status"] == "open"
+
+
+async def test_get_missing_complaint_is_404(client):
+    response = await client.get("/complaints/00000000-0000-0000-0000-000000000000")
+    assert response.status_code == 404
+
+
+async def test_list_complaints_is_priority_sorted_and_filterable(client):
+    await client.post(
         "/complaints",
-        json={"description": "Broken chair", "location_building": "Hostel A"},
+        json={"description": "Minor scuff on a wall.", "location_building": "Main Library"},
     )
-    open_id = open_resp.json()["id"]
-    resolve_id = to_resolve_resp.json()["id"]
-
-    patch_resp = await client.patch(
-        f"/complaints/{resolve_id}/status",
-        json={"status": "resolved", "note": "Fixed by facilities", "actor": "admin@campus.edu"},
-    )
-    assert patch_resp.status_code == 200
-    assert patch_resp.json()["status"] == "resolved"
-
-    open_list = await client.get("/complaints", params={"status": "open"})
-    open_ids = {c["id"] for c in open_list.json()}
-    assert open_id in open_ids
-    assert resolve_id not in open_ids
-
-    resolved_list = await client.get("/complaints", params={"status": "resolved"})
-    resolved_ids = {c["id"] for c in resolved_list.json()}
-    assert resolve_id in resolved_ids
-    assert open_id not in resolved_ids
-
-
-@pytest.mark.asyncio
-async def test_update_status_rejects_unknown_status(client: AsyncClient) -> None:
-    create_resp = await client.post(
+    await client.post(
         "/complaints",
-        json={"description": "Flickering lights", "location_building": "Block D"},
+        json={
+            "description": "Exposed sparking wiring near the panel, completely dangerous.",
+            "location_building": "Hostel Block B",
+        },
     )
-    complaint_id = create_resp.json()["id"]
 
-    resp = await client.patch(
-        f"/complaints/{complaint_id}/status", json={"status": "not_a_real_status"}
+    everything = (await client.get("/complaints")).json()
+    assert len(everything) == 2
+    scores = [c["priority_score"] for c in everything]
+    assert scores == sorted(scores, reverse=True)
+
+    filtered = (await client.get("/complaints?building=Hostel Block B")).json()
+    assert len(filtered) == 1
+    assert filtered[0]["location_building"] == "Hostel Block B"
+
+    by_status = (await client.get("/complaints?status=resolved")).json()
+    assert by_status == []
+
+
+# --- clusters -------------------------------------------------------------
+
+
+async def test_clusters_endpoint_exposes_real_clusters(client):
+    for student in ("student_a", "student_b", "student_c"):
+        await client.post(
+            "/complaints",
+            json={
+                "description": "Water is leaking from the ceiling in the Block A hostel corridor.",
+                "location_building": "Hostel Block A",
+                "student_id": student,
+            },
+        )
+
+    clusters = (await client.get("/clusters")).json()
+    assert len(clusters) == 1
+    cluster = clusters[0]
+    assert cluster["independent_student_count"] == 3
+    assert cluster["is_recurring"] is True
+    assert cluster["representative_complaint_id"]
+
+    detail = (await client.get(f"/clusters/{cluster['id']}")).json()
+    assert len(detail["members"]) == 3
+
+    recurring_only = (await client.get("/clusters?recurring_only=true")).json()
+    assert len(recurring_only) == 1
+
+
+# --- admin ----------------------------------------------------------------
+
+
+async def test_admin_routes_are_open_when_no_token_is_configured(client):
+    assert get_settings().admin_token == "", "this test assumes the dev default"
+    response = await client.get("/admin/stats")
+    assert response.status_code == 200
+
+
+async def test_admin_routes_are_enforced_once_a_token_is_configured(client, monkeypatch):
+    settings = get_settings()
+    monkeypatch.setattr(settings, "admin_token", "s3cret")
+
+    assert (await client.get("/admin/stats")).status_code == 401
+    assert (
+        await client.get("/admin/stats", headers={"X-Admin-Token": "wrong"})
+    ).status_code == 401
+    assert (
+        await client.get("/admin/stats", headers={"X-Admin-Token": "s3cret"})
+    ).status_code == 200
+
+
+async def test_status_changes_are_gated_by_the_admin_token(client, monkeypatch):
+    created = (
+        await client.post(
+            "/complaints",
+            json={"description": "Broken lock on the gate.", "location_building": "Main Gate"},
+        )
+    ).json()
+
+    monkeypatch.setattr(get_settings(), "admin_token", "s3cret")
+    unauthorized = await client.patch(
+        f"/complaints/{created['id']}/status", json={"status": "resolved"}
     )
-    assert resp.status_code == 422
+    assert unauthorized.status_code == 401
 
-
-# --- Departments / categories CRUD --------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_department_create_get_update_delete(client: AsyncClient) -> None:
-    create_resp = await client.post(
-        "/departments",
-        json={"name": "Test Ops Dept", "contact_email": "testops@campus.edu"},
+    authorized = await client.patch(
+        f"/complaints/{created['id']}/status",
+        json={"status": "resolved", "note": "Fixed by facilities"},
+        headers={"X-Admin-Token": "s3cret"},
     )
-    assert create_resp.status_code == 201
-    dept = create_resp.json()
+    assert authorized.status_code == 200
+    assert authorized.json()["status"] == "resolved"
 
-    get_resp = await client.get(f"/departments/{dept['id']}")
-    assert get_resp.status_code == 200
-    assert get_resp.json()["name"] == "Test Ops Dept"
+    events = (await client.get(f"/complaints/{created['id']}/events")).json()
+    assert [e["status"] for e in events] == ["open", "resolved"]
 
-    patch_resp = await client.patch(
-        f"/departments/{dept['id']}", json={"contact_email": "new-testops@campus.edu"}
+
+async def test_admin_can_override_routing(client):
+    created = (
+        await client.post(
+            "/complaints",
+            json={"description": "The wifi is down in the library.", "location_building": "Main Library"},
+        )
+    ).json()
+    departments = (await client.get("/departments")).json()
+    target = next(d for d in departments if d["name"] != created["department_name"])
+
+    response = await client.patch(
+        f"/admin/complaints/{created['id']}/route",
+        json={"department_id": target["id"], "note": "Handled by facilities instead"},
     )
-    assert patch_resp.status_code == 200
-    assert patch_resp.json()["contact_email"] == "new-testops@campus.edu"
-
-    delete_resp = await client.delete(f"/departments/{dept['id']}")
-    assert delete_resp.status_code == 204
-
-    missing_resp = await client.get(f"/departments/{dept['id']}")
-    assert missing_resp.status_code == 404
+    assert response.status_code == 200
+    body = response.json()
+    assert body["department_name"] == target["name"]
+    assert body["department_overridden"] is True
 
 
-@pytest.mark.asyncio
-async def test_category_requires_valid_department(client: AsyncClient) -> None:
-    resp = await client.post(
-        "/categories",
-        json={"slug": "test-category", "default_department_id": str(uuid.uuid4())},
+async def test_admin_ask_returns_a_grounded_answer(client):
+    await client.post(
+        "/complaints",
+        json={
+            "description": "The wifi is completely down in Innovation Hall.",
+            "location_building": "Innovation Hall",
+        },
     )
-    # default_department_id doesn't exist -> FK violation -> 409, not a 500.
-    assert resp.status_code == 409
+    response = await client.post("/admin/ask", json={"question": "any wifi problems?"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["matched_count"] == 1
+    assert len(body["cited_complaint_ids"]) == 1
+    assert "wifi" in body["filters"]
+
+
+async def test_admin_stats_and_digest(client):
+    await client.post(
+        "/complaints",
+        json={"description": "Overflowing bins outside the cafeteria.", "location_building": "Cafeteria"},
+    )
+
+    stats = (await client.get("/admin/stats")).json()
+    assert stats["open"] == 1
+    assert stats["resolved"] == 0
+
+    digest = (await client.get("/admin/digest?window_days=7")).json()
+    assert digest["total_complaints"] == 1
+    assert digest["top_buildings"][0]["label"] == "Cafeteria"
+    assert len(digest["headline_issues"]) == 1
+
+
+async def test_deleting_a_complaint_requires_admin_and_recounts_its_cluster(client, monkeypatch):
+    ids = []
+    for student in ("student_a", "student_b", "student_c"):
+        body = (
+            await client.post(
+                "/complaints",
+                json={
+                    "description": "Water is leaking from the ceiling in the Block A hostel corridor.",
+                    "location_building": "Hostel Block A",
+                    "student_id": student,
+                },
+            )
+        ).json()
+        ids.append(body["id"])
+
+    monkeypatch.setattr(get_settings(), "admin_token", "s3cret")
+    assert (await client.delete(f"/complaints/{ids[-1]}")).status_code == 401
+
+    deleted = await client.delete(
+        f"/complaints/{ids[-1]}", headers={"X-Admin-Token": "s3cret"}
+    )
+    assert deleted.status_code == 204
+
+    clusters = (await client.get("/clusters", headers={"X-Admin-Token": "s3cret"})).json()
+    assert clusters[0]["member_count"] == 2
+    assert clusters[0]["independent_student_count"] == 2
+    assert clusters[0]["is_recurring"] is False, "dropping below 3 students undoes recurring"
