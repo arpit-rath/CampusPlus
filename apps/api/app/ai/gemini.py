@@ -139,14 +139,33 @@ def _normalize(values: list[float]) -> list[float]:
     return [v / norm for v in values]
 
 
+# HTTP statuses and status strings that mean "this model, right now" rather
+# than "this request is wrong" — the ones worth retrying on another model.
+_CAPACITY_MARKERS = (
+    "503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED", "overloaded",
+    "high demand", "500", "INTERNAL", "deadline", "timeout",
+)
+
+
+def _is_capacity_error(exc: Exception) -> bool:
+    """True when `exc` looks like transient model capacity pressure.
+
+    Matched on the message rather than on SDK exception classes on purpose:
+    the google-genai error hierarchy has moved between versions, and a
+    misclassification here should fail safe (not retry) rather than crash.
+    """
+    text = f"{type(exc).__name__}: {exc}"
+    return any(marker.lower() in text.lower() for marker in _CAPACITY_MARKERS)
+
+
 class GeminiProvider(AIProvider):
     """`AIProvider` implementation backed by Gemini via `google-genai`."""
 
     def __init__(self) -> None:
         settings = get_settings()
-        self._model = settings.gemini_model
+        self._models = settings.gemini_model_chain
+        self._model = self._models[0]
         self._embedding_model = settings.gemini_embedding_model
-
         if not settings.llm_api_key:
             raise ValueError(
                 "LLM_PROVIDER=gemini but LLM_API_KEY is empty. Set it in "
@@ -170,6 +189,48 @@ class GeminiProvider(AIProvider):
             response_mime_type="application/json",
             response_schema=schema,
         )
+
+    async def _generate(self, parts: list, schema: dict):
+        """Call generate_content, stepping down the model chain on capacity errors.
+
+        A 503 "this model is currently experiencing high demand" or a 429 is
+        about *that model* right now, not about the request — so retrying the
+        same call against an older flash generation usually succeeds
+        immediately and keeps the demo on real Gemini output. Only when every
+        model in the chain fails does this raise, letting `FallbackProvider`
+        degrade to the mock provider.
+
+        Errors that are not capacity-related (a bad key, a malformed request)
+        are raised straight away: retrying them on another model would just
+        be three identical failures and three times the latency.
+        """
+        last_error: Exception | None = None
+
+        for model in self._models:
+            try:
+                response = await self._client.aio.models.generate_content(
+                    model=model,
+                    contents=parts,
+                    config=self._generation_config(schema),
+                )
+            except Exception as exc:  # noqa: BLE001 — classified below
+                if not _is_capacity_error(exc):
+                    raise
+                last_error = exc
+                logger.warning(
+                    "gemini model %s unavailable (%s); trying the next model",
+                    model,
+                    type(exc).__name__,
+                )
+                continue
+
+            if model != self._model:
+                logger.info("gemini served by fallback model %s", model)
+            return response
+
+        raise RuntimeError(
+            f"every configured Gemini model was unavailable ({self._models}): {last_error}"
+        ) from last_error
 
     def _embed_config(self):
         types = self._genai.types
@@ -195,11 +256,7 @@ class GeminiProvider(AIProvider):
                 )
             )
 
-        response = await self._client.aio.models.generate_content(
-            model=self._model,
-            contents=parts,
-            config=self._generation_config(GEMINI_RESPONSE_SCHEMA),
-        )
+        response = await self._generate(parts, GEMINI_RESPONSE_SCHEMA)
 
         payload = _extract_json(response.text or "")
         understanding = parse_understanding(
@@ -252,10 +309,8 @@ class GeminiProvider(AIProvider):
             + f"Complaint records (JSON):\n{json.dumps(records, default=str)}"
         )
 
-        response = await self._client.aio.models.generate_content(
-            model=self._model,
-            contents=[self._genai.types.Part.from_text(text=prompt)],
-            config=self._generation_config(GEMINI_ANSWER_SCHEMA),
+        response = await self._generate(
+            [self._genai.types.Part.from_text(text=prompt)], GEMINI_ANSWER_SCHEMA
         )
 
         payload = _extract_json(response.text or "")

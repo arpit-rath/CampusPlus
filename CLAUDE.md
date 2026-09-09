@@ -37,9 +37,15 @@ docker compose up -d
 # 2. No Docker? A pip-installable Postgres+pgvector, no admin rights needed.
 pip install pgserver && python scripts/dev_db.py start   # prints DATABASE_URL
 
-# 3. Hosted Postgres (Supabase etc.) — put its URL in apps/api/.env with
+# 3. Hosted Postgres (Supabase etc.) - put its URL in apps/api/.env with
 #    the +asyncpg driver.
 ```
+
+Docker Desktop is installed on the primary dev machine but its engine needs
+the WSL2 backend, which was staged and **requires a restart to activate**.
+Until that reboot happens, use option 2 - it is a real PostgreSQL with real
+pgvector, so every code path (HNSW index, `<=>` operator, `vector(768)`
+column) is exercised identically.
 
 Then:
 
@@ -109,6 +115,13 @@ Model choices (re-verify against live docs before a demo; these move fast):
 `gemini-3.8-flash` for understanding, `gemini-embedding-001` with
 `task_type=CLUSTERING` truncated to 768 dims. `gemini-embedding-2` is also
 supported — `_embed_config` drops `task_type` for that family automatically.
+
+`GEMINI_FALLBACK_MODELS` is a comma-separated chain tried in order when the
+primary model returns a capacity error (503 "high demand", 429). The newest
+flash models are the most likely to be capacity-constrained on a free tier —
+during this build 3.8 and 3.7 both 503'd while 3.6 answered instantly — and
+stepping down a generation is a much better degrade than dropping to the mock.
+MockProvider remains the last resort.
 
 ## Data model — source of truth
 

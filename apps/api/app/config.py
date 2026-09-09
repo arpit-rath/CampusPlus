@@ -31,6 +31,14 @@ class Settings(BaseSettings):
     llm_provider: str = "mock"  # "mock" | "gemini" (openai/claude stubbed)
     llm_api_key: str = ""
     gemini_model: str = "gemini-3.8-flash"
+    # Tried in order when the primary model returns a retryable error. The
+    # newest flash models are the ones most likely to be capacity-constrained
+    # on a free tier — during this build 3.8 and 3.7 both returned
+    # "503 UNAVAILABLE: this model is currently experiencing high demand"
+    # while 3.6 answered immediately. Stepping down a model generation is a
+    # far better degrade than dropping to the mock provider, so it is tried
+    # first; MockProvider remains the last resort.
+    gemini_fallback_models: str = "gemini-3.7-flash,gemini-3.6-flash"
     gemini_embedding_model: str = "gemini-embedding-001"
     # Hard ceiling on any single provider call. A demo that hangs is worse
     # than a demo that quietly falls back to the mock provider.
@@ -71,6 +79,13 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def gemini_model_chain(self) -> list[str]:
+        """Primary model first, then each configured fallback, de-duplicated."""
+        chain = [self.gemini_model.strip()]
+        chain += [m.strip() for m in self.gemini_fallback_models.split(",")]
+        return list(dict.fromkeys(m for m in chain if m))
 
 
 @lru_cache
