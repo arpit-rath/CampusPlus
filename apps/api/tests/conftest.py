@@ -31,14 +31,50 @@ way from its cause. Mark the test
 from __future__ import annotations
 
 import os
-from collections.abc import AsyncGenerator
 
-import pytest
-import pytest_asyncio
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+# Force the mock provider before anything imports `app.config`, whose
+# `get_settings()` is lru_cached and is called at import time by
+# `app.db.database`. Set any later and the cached Settings would already
+# carry whatever `.env` says.
+#
+# This matters more than it looks. With `LLM_PROVIDER=gemini` in .env the
+# HTTP tests were making real API calls: the suite went from 3 seconds to
+# 213, and when a call fell back to the mock mid-test the embeddings came
+# from a different provider than their neighbours, so clustering assertions
+# failed for reasons that had nothing to do with the code. Tests must be
+# hermetic, deterministic, and free.
+os.environ["LLM_PROVIDER"] = "mock"
+os.environ["LLM_API_KEY"] = ""
 
-from app.db.database import async_session_factory, engine
+from collections.abc import AsyncGenerator  # noqa: E402
+
+import pytest  # noqa: E402
+import pytest_asyncio  # noqa: E402
+from sqlalchemy import text  # noqa: E402
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: E402
+
+from app.config import get_settings  # noqa: E402
+from app.db.database import async_session_factory, engine  # noqa: E402
+
+# Belt and braces: if a .env was already read before this module was
+# imported, correct the cached Settings object too.
+_settings = get_settings()
+_settings.llm_provider = "mock"
+_settings.llm_api_key = ""
+
+
+@pytest.fixture(autouse=True)
+def _never_call_a_real_provider():
+    """Fail loudly rather than quietly spending quota.
+
+    An autouse guard so that a future change to settings handling cannot
+    silently point the suite at a live API again.
+    """
+    assert get_settings().llm_provider == "mock", (
+        "tests must run against MockProvider — something re-pointed "
+        "LLM_PROVIDER at a live API"
+    )
+    yield
 
 SKIP_REASON = (
     "No Postgres+pgvector reachable at DATABASE_URL. Start one with "

@@ -45,6 +45,10 @@ pip install pgserver && python scripts/dev_db.py start  # no Docker, no admin ri
 # or point DATABASE_URL at a hosted Postgres (Supabase etc.)
 ```
 
+> Docker Desktop is installed on the primary dev machine, but its engine needs
+> the WSL2 backend, which is staged and activates on the next restart. Until
+> then `scripts/dev_db.py` gives you a real PostgreSQL with real pgvector.
+
 **2. Backend.**
 
 ```bash

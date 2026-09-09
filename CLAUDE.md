@@ -89,6 +89,12 @@ The DB-backed fixtures **TRUNCATE the complaint tables** before and after each
 test. Running the suite wipes seeded demo data — re-run `seed_demo.py --post`
 afterwards. Reference data (departments, categories) survives.
 
+`conftest.py` pins `LLM_PROVIDER=mock` before anything imports `app.config`,
+and an autouse fixture asserts it. Tests must never call a live API: with
+`LLM_PROVIDER=gemini` in `.env` the suite went from 3 seconds to 213 and
+started failing on clustering assertions, because calls that fell back
+mid-test produced embeddings from a different space than their neighbours.
+
 ## AI provider contract — do not bypass this
 
 All model calls go through `apps/api/app/ai/provider.py`'s `AIProvider`
