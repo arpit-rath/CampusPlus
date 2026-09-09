@@ -1,56 +1,104 @@
 # CampusPluse
 
 AI-powered campus problem intelligence. Students report campus issues with a
-description, photo, and location; the system categorizes them, scores
-priority, detects duplicate and recurring problems via embeddings, and
-routes each one to the right department. Admins get a live dashboard instead
-of a flat ticket queue.
+description, photo and location; the system works out which reports are the
+*same* problem, which problems keep coming back, and which deserve attention
+first — and explains every one of those decisions.
 
-Full build plan (architecture, AI pipeline, 48-hour timeline, demo script):
-[`docs/build-plan.md`](docs/build-plan.md).
+The complaint form is not the product. The intelligence layer is.
 
-**Read `CLAUDE.md` before touching anything** — it's the shared contract
-(schema, AI provider interface, priority formula, conventions) every part of
-this repo is built against.
+**Read [`CLAUDE.md`](CLAUDE.md) before touching anything** — it is the shared
+contract (schema, AI provider interface, priority formula, thresholds,
+security rules). Full build plan: [`docs/build-plan.md`](docs/build-plan.md).
+
+## What it actually does
+
+```
+student submits
+   → multimodal understanding (category, severity 1-5, safety flag, photo check, summary)
+     → embed the normalized summary (768-dim)
+       → pgvector cosine search, scoped to same category + building + 14 days
+         → >= 0.92 auto-merge · 0.75-0.92 ask an admin · < 0.75 new complaint
+           → count INDEPENDENT students; 3+ makes it a recurring issue
+             → recompute explainable priority for every cluster member
+               → route to a department
+                 → broadcast over the websocket; the dashboard reacts live
+```
 
 ## Layout
 
 ```
-apps/web/     Next.js 15 — student report flow + admin dashboard
-apps/api/     FastAPI — CRUD, AI pipeline, clustering, priority scoring
-packages/     Shared TypeScript types generated from the API's OpenAPI spec
-scripts/      Seed / demo-data tooling
-docs/         The build plan and any other reference docs
+apps/web/     Next.js 15 — student report flow + admin command center
+apps/api/     FastAPI — pipeline, clustering, priority, realtime, admin API
+packages/     Shared TypeScript types
+scripts/      seed_demo.py (demo + test fixture), dev_db.py (no-Docker database)
+docs/         Build plan
 ```
 
 ## Local setup
 
-```bash
-# 1. Database (Postgres + pgvector)
-docker compose up -d
+**1. A database with pgvector.** Any one of:
 
-# 2. Backend
+```bash
+docker compose up -d                                    # preferred
+pip install pgserver && python scripts/dev_db.py start  # no Docker, no admin rights
+# or point DATABASE_URL at a hosted Postgres (Supabase etc.)
+```
+
+**2. Backend.**
+
+```bash
 cd apps/api
-cp .env.example .env      # fill in DATABASE_URL / LLM_API_KEY
+cp .env.example .env          # set DATABASE_URL; LLM_PROVIDER=mock needs no key
 pip install -r requirements.txt
 alembic upgrade head
 uvicorn app.main:app --reload --port 8000
+```
 
-# 3. Frontend (separate terminal)
+**3. Frontend** (separate terminal).
+
+```bash
 cd apps/web
 cp .env.example .env.local
 npm install
 npm run dev
 ```
 
-The API serves its OpenAPI spec at `http://localhost:8000/docs` — use it to
-sanity-check request/response shapes across tracks before wiring the
-frontend to a new endpoint.
+**4. Demo data**, pushed through the real pipeline — real model calls, real
+embeddings, real pgvector search, real clusters:
 
-## Provider
+```bash
+python scripts/seed_demo.py --post           # seed
+python scripts/seed_demo.py --post --reset   # clear first, for a repeatable demo
+```
 
-Set `LLM_PROVIDER=gemini` and `LLM_API_KEY=<your Gemini API key>` in
-`apps/api/.env` once you have one. Until then, `LLM_PROVIDER=mock` (the
-default in `.env.example`) runs the whole pipeline against a fake provider
-that returns realistic-but-fake structured output and embeddings — the rest
-of the system works identically either way.
+OpenAPI docs at `http://localhost:8000/docs`; `GET /health` reports which
+provider is actually live and whether admin auth is on.
+
+## Testing
+
+```bash
+cd apps/api && pytest        # 116 tests; DB-backed ones skip without a database
+RUN_DB_TESTS=1 pytest        # turn those skips into failures (CI)
+cd apps/web && npm run build
+```
+
+`apps/api/tests/test_pipeline_db.py::test_the_signature_demo` is the one that
+matters: it drives three students reporting the same leak through the real
+pipeline against real pgvector and asserts each visible step — merge, then
+recurring, then the priority rise on the *earlier* reports.
+
+Note: the DB fixtures truncate complaint tables around each test, so running
+the suite clears seeded demo data. Re-seed afterwards.
+
+## AI provider
+
+`LLM_PROVIDER=mock` (the default) runs the entire pipeline against
+deterministic fake-but-realistic structured output and embeddings — no key, no
+network, no quota burned, and near-duplicates still cluster correctly, so the
+whole demo works offline.
+
+Set `LLM_PROVIDER=gemini` and `LLM_API_KEY=<key>` for the real thing. Gemini
+calls are wrapped with a timeout and fall back to the mock provider
+automatically on failure, so a rate limit mid-demo degrades instead of
+crashing.
