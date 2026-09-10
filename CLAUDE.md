@@ -41,11 +41,11 @@ pip install pgserver && python scripts/dev_db.py start   # prints DATABASE_URL
 #    the +asyncpg driver.
 ```
 
-Docker Desktop is installed on the primary dev machine but its engine needs
-the WSL2 backend, which was staged and **requires a restart to activate**.
-Until that reboot happens, use option 2 - it is a real PostgreSQL with real
-pgvector, so every code path (HNSW index, `<=>` operator, `vector(768)`
-column) is exercised identically.
+Option 1 is verified working on the primary dev machine (Docker Desktop with
+the WSL2 backend). Option 2 stays documented because it needs neither Docker
+nor admin rights, and it is a real PostgreSQL with real pgvector - every code
+path (HNSW index, `<=>` operator, `vector(768)` column) is exercised
+identically either way.
 
 Then:
 

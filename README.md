@@ -35,6 +35,48 @@ scripts/      seed_demo.py (demo + test fixture), dev_db.py (no-Docker database)
 docs/         Build plan
 ```
 
+## Running it in VS Code
+
+Open the **`CampusPlus` folder** as the workspace root (not `Documents`).
+
+Press `Ctrl+Shift+P` -> **Tasks: Run Task** -> **Start everything**. That runs
+three tasks in order and leaves each in its own terminal tab:
+
+| Task | What it does | URL |
+|---|---|---|
+| 1: Database (Docker) | Postgres 16 + pgvector, waits for healthy | `localhost:5432` |
+| 2: API (FastAPI) | Owns every DB write and AI call | http://localhost:8000 |
+| 3: Web (Next.js) | Student flow + admin dashboard | http://localhost:3000 |
+
+Then run the **Seed demo data** task once to populate the dashboard.
+
+Other tasks in the same menu: *Seed: demo clusters only* (fast, just the two
+merge clusters), *Run backend tests*, *Typecheck web*, *Stop database*.
+
+`F5` gives you two debug configurations: **Debug API (FastAPI)** with working
+breakpoints, and **Debug: one pytest file** for whichever test file is open.
+
+### Or by hand, three terminals
+
+```bash
+# Terminal 1 - database
+docker compose up -d
+
+# Terminal 2 - API
+cd apps/api
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
+
+# Terminal 3 - web
+cd apps/web
+npm run dev
+```
+
+Open http://localhost:3000. First run only, in a fourth terminal:
+
+```bash
+.\apps\api\.venv\Scripts\python.exe scripts\seed_demo.py --post --reset
+```
+
 ## Local setup
 
 **1. A database with pgvector.** Any one of:
@@ -45,9 +87,9 @@ pip install pgserver && python scripts/dev_db.py start  # no Docker, no admin ri
 # or point DATABASE_URL at a hosted Postgres (Supabase etc.)
 ```
 
-> Docker Desktop is installed on the primary dev machine, but its engine needs
-> the WSL2 backend, which is staged and activates on the next restart. Until
-> then `scripts/dev_db.py` gives you a real PostgreSQL with real pgvector.
+> Docker is the verified path. `scripts/dev_db.py` is the fallback for a
+> machine without Docker or admin rights - a real PostgreSQL with real
+> pgvector, so the code behaves identically either way.
 
 **2. Backend.**
 

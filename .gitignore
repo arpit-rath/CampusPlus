@@ -35,7 +35,7 @@ pgdata/
 *.sqlite3
 
 # Claude worktrees (local only, never pushed)
-.claude/worktrees/
+.claude/
 
 # Local dev database created by scripts/dev_db.py (a whole Postgres cluster)
 .devdb/
