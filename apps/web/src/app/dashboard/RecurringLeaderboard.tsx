@@ -37,7 +37,7 @@ export function RecurringLeaderboard({
     .slice(0, limit);
 
   return (
-    <section className="h-full rounded-xl border border-ink/10 bg-white p-4">
+    <section className="h-full rounded-xl border border-ink/10 bg-surface p-4">
       <div className="flex items-start justify-between">
         <div>
           <h2 className="text-sm font-semibold uppercase tracking-wide text-ink">
@@ -91,12 +91,12 @@ export function RecurringLeaderboard({
                       {categoryLabel(cluster.category_slug)}
                     </span>
                     {cluster.is_recurring && (
-                      <span className="shrink-0 rounded-full bg-critical px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
+                      <span className="shrink-0 rounded-full bg-critical px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-on-critical">
                         Recurring
                       </span>
                     )}
                     {cluster.safety_flag && (
-                      <span className="shrink-0 rounded-full bg-[#8B2E8B]/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#8B2E8B]">
+                      <span className="shrink-0 rounded-full bg-hazard/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-hazard">
                         Safety
                       </span>
                     )}

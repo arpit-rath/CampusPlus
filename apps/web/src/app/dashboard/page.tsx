@@ -34,6 +34,7 @@ import {
 import { categoryLabel, CATEGORY_SLUGS } from "@/lib/campus";
 import { PriorityBar } from "@/components/PriorityBar";
 import { LiveIndicator, type ConnectionStatus } from "@/components/LiveIndicator";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { RecurringLeaderboard } from "./RecurringLeaderboard";
 import { AskCampusPlus } from "./AskCampusPlus";
 import { LocationHeatmap } from "./LocationHeatmap";
@@ -176,6 +177,7 @@ export default function DashboardPage() {
             </span>
           )}
           <LiveIndicator status={connection} />
+          <ThemeToggle />
         </div>
       </header>
 
@@ -219,7 +221,7 @@ export default function DashboardPage() {
 
       <DigestPanel onChaos={announce} />
 
-      <section className="rounded-xl border border-ink/10 bg-white">
+      <section className="rounded-xl border border-ink/10 bg-surface">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink/10 px-4 py-3">
           <div>
             <h2 className="text-sm font-semibold uppercase tracking-wide text-ink">
@@ -235,7 +237,7 @@ export default function DashboardPage() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as ComplaintStatus | "")}
-              className="rounded-md border border-ink/15 bg-white px-2 py-1.5 text-xs text-ink outline-none focus:border-signal"
+              className="rounded-md border border-ink/15 bg-surface px-2 py-1.5 text-xs text-ink outline-none focus:border-signal"
               aria-label="Filter by status"
             >
               <option value="">All statuses</option>
@@ -247,7 +249,7 @@ export default function DashboardPage() {
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="rounded-md border border-ink/15 bg-white px-2 py-1.5 text-xs text-ink outline-none focus:border-signal"
+              className="rounded-md border border-ink/15 bg-surface px-2 py-1.5 text-xs text-ink outline-none focus:border-signal"
               aria-label="Filter by category"
             >
               <option value="">All categories</option>
@@ -334,7 +336,7 @@ function StatsRow({
     {
       label: "Safety flags",
       value: stats?.safety_flagged ?? complaints.filter((c) => c.safety_flag).length,
-      accent: "text-[#8B2E8B]",
+      accent: "text-hazard",
     },
     {
       label: "Needs review",
@@ -349,7 +351,7 @@ function StatsRow({
       {tiles.map((tile) => (
         <div
           key={tile.label}
-          className="rounded-xl border border-ink/10 bg-white px-4 py-3"
+          className="rounded-xl border border-ink/10 bg-surface px-4 py-3"
           title={tile.hint}
         >
           <p className="text-[11px] uppercase tracking-wide text-ink/50">{tile.label}</p>
@@ -387,11 +389,11 @@ function AdminTokenPrompt({ onSaved }: { onSaved: () => void }) {
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder="X-Admin-Token"
-        className="rounded-md border border-ink/20 bg-white px-3 py-1.5 font-mono text-sm outline-none focus:border-signal"
+        className="rounded-md border border-ink/20 bg-surface px-3 py-1.5 font-mono text-sm outline-none focus:border-signal"
       />
       <button
         type="submit"
-        className="rounded-md bg-signal px-3 py-1.5 text-sm font-medium text-white"
+        className="rounded-md bg-signal-fill px-3 py-1.5 text-sm font-medium text-on-signal"
       >
         Save
       </button>

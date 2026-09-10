@@ -162,7 +162,7 @@ export default function TrackComplaintPage() {
         </div>
       )}
 
-      <section className="rounded-xl border border-ink/10 bg-white p-5">
+      <section className="rounded-xl border border-ink/10 bg-surface p-5">
         <h2 className="font-mono text-xs uppercase tracking-widest text-ink/50">
           AI summary
         </h2>
@@ -176,7 +176,7 @@ export default function TrackComplaintPage() {
       </section>
 
       <section
-        className={`rounded-xl border bg-white p-5 transition-colors ${
+        className={`rounded-xl border bg-surface p-5 transition-colors ${
           justUpdated ? "border-signal bg-signal/5" : "border-ink/10"
         }`}
       >

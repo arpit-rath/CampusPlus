@@ -79,7 +79,7 @@ export function LocationHeatmap({
   const hoveredState = active.find((b) => b.name === hovered) ?? null;
 
   return (
-    <section className="rounded-xl border border-ink/10 bg-white p-4">
+    <section className="rounded-xl border border-ink/10 bg-surface p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold uppercase tracking-wide text-ink">
@@ -91,7 +91,7 @@ export function LocationHeatmap({
         </div>
         <div className="flex flex-wrap items-center gap-3 text-[11px] text-ink/50">
           <Legend className="bg-critical" label="Recurring" />
-          <Legend className="bg-[#8B2E8B]" label="Safety flagged" />
+          <Legend className="bg-hazard" label="Safety flagged" />
           <Legend className="bg-signal" label="Open" />
         </div>
       </div>
@@ -101,7 +101,7 @@ export function LocationHeatmap({
           No open complaints anywhere on campus.
         </p>
       ) : (
-        <div className="relative mt-3 aspect-[16/9] w-full overflow-hidden rounded-lg border border-ink/10 bg-[#F4F6F3]">
+        <div className="relative mt-3 aspect-[16/9] w-full overflow-hidden rounded-lg border border-ink/10 bg-map-bg">
           {/* Faint zone bands, purely to give the markers spatial context. */}
           <div className="absolute inset-x-0 top-0 h-[38%] bg-ink/[0.02]" />
           <div className="absolute inset-x-0 bottom-0 h-[34%] bg-ink/[0.03]" />

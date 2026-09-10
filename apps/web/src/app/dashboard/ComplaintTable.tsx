@@ -139,7 +139,7 @@ export function ComplaintTable({
                     onClick={() => setExpandedId(expanded ? null : complaint.id)}
                     className={`cursor-pointer border-b border-ink/5 transition-colors hover:bg-ink/[0.03] ${
                       expanded ? "bg-ink/[0.03]" : ""
-                    } ${complaint.safety_flag ? "border-l-2 border-l-[#8B2E8B]" : ""}`}
+                    } ${complaint.safety_flag ? "border-l-2 border-l-hazard" : ""}`}
                   >
                     <td className="px-4 py-3">
                       <span
@@ -154,7 +154,7 @@ export function ComplaintTable({
                           {categoryLabel(complaint.category_slug)}
                         </span>
                         {complaint.safety_flag && (
-                          <span className="rounded bg-[#8B2E8B]/15 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#8B2E8B]">
+                          <span className="rounded bg-hazard/15 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wider text-hazard">
                             Safety
                           </span>
                         )}
@@ -303,7 +303,7 @@ export function ComplaintTable({
                                     `#${complaint.id.slice(0, 8)} re-routed.`,
                                   )
                                 }
-                                className="mt-1.5 w-full rounded-md border border-ink/15 bg-white px-2 py-1.5 text-xs outline-none focus:border-signal disabled:opacity-40"
+                                className="mt-1.5 w-full rounded-md border border-ink/15 bg-surface px-2 py-1.5 text-xs outline-none focus:border-signal disabled:opacity-40"
                               >
                                 <option value="">Unassigned</option>
                                 {departments.map((department) => (
@@ -326,7 +326,7 @@ export function ComplaintTable({
                                     `#${complaint.id.slice(0, 8)} re-categorized.`,
                                   )
                                 }
-                                className="mt-1.5 w-full rounded-md border border-ink/15 bg-white px-2 py-1.5 text-xs outline-none focus:border-signal disabled:opacity-40"
+                                className="mt-1.5 w-full rounded-md border border-ink/15 bg-surface px-2 py-1.5 text-xs outline-none focus:border-signal disabled:opacity-40"
                               >
                                 <option value="">Uncategorized</option>
                                 {CATEGORY_SLUGS.map((slug) => (

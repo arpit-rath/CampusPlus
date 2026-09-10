@@ -53,7 +53,7 @@ export function AskCampusPlus({ complaints }: { complaints: Complaint[] }) {
   };
 
   return (
-    <section className="flex h-full flex-col rounded-xl border border-ink/10 bg-white p-4">
+    <section className="flex h-full flex-col rounded-xl border border-ink/10 bg-surface p-4">
       <h2 className="text-sm font-semibold uppercase tracking-wide text-ink">
         Ask CampusPlus
       </h2>
@@ -75,12 +75,12 @@ export function AskCampusPlus({ complaints }: { complaints: Complaint[] }) {
           maxLength={500}
           disabled={asking}
           placeholder="Ask about the campus…"
-          className="min-w-0 flex-1 rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm outline-none placeholder:text-ink/30 focus:border-signal disabled:opacity-60"
+          className="min-w-0 flex-1 rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm outline-none placeholder:text-ink/30 focus:border-signal disabled:opacity-60"
         />
         <button
           type="submit"
           disabled={asking || !question.trim()}
-          className="shrink-0 rounded-lg bg-ink px-3 py-2 text-sm font-medium text-white disabled:opacity-40"
+          className="shrink-0 rounded-lg bg-ink px-3 py-2 text-sm font-medium text-paper disabled:opacity-40"
         >
           {asking ? "…" : "Ask"}
         </button>

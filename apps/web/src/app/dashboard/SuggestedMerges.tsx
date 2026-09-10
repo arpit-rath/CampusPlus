@@ -75,7 +75,7 @@ export function SuggestedMerges({
           return (
             <li
               key={merge.complaint.id}
-              className="rounded-lg border border-ink/10 bg-white p-3"
+              className="rounded-lg border border-ink/10 bg-surface p-3"
             >
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-full bg-signal/15 px-2 py-0.5 font-mono text-[11px] font-semibold text-signal">
@@ -106,7 +106,7 @@ export function SuggestedMerges({
                 <button
                   onClick={() => decide(merge, true)}
                   disabled={busy}
-                  className="rounded-md bg-ink px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+                  className="rounded-md bg-ink px-3 py-1.5 text-xs font-medium text-paper disabled:opacity-40"
                 >
                   {busy ? "Working…" : "Same problem — merge"}
                 </button>

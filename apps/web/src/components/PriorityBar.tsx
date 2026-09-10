@@ -32,8 +32,8 @@ const SEGMENTS = [
   {
     key: "safety" as const,
     label: "Safety",
-    className: "bg-[#8B2E8B]",
-    swatch: "bg-[#8B2E8B]",
+    className: "bg-hazard",
+    swatch: "bg-hazard",
     explain: "All-or-nothing: flagged as a physical safety risk.",
   },
   {

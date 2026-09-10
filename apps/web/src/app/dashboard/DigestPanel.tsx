@@ -73,7 +73,7 @@ export function DigestPanel({ onChaos }: { onChaos: (message: string) => void })
   };
 
   return (
-    <section className="rounded-xl border border-ink/10 bg-white">
+    <section className="rounded-xl border border-ink/10 bg-surface">
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
         <button
           onClick={() => setOpen((v) => !v)}
@@ -105,7 +105,7 @@ export function DigestPanel({ onChaos }: { onChaos: (message: string) => void })
                   onClick={() => setWindowDays(w.days)}
                   className={`px-2.5 py-1 text-xs font-medium transition-colors first:rounded-l-md last:rounded-r-md ${
                     windowDays === w.days
-                      ? "bg-ink text-white"
+                      ? "bg-ink text-paper"
                       : "text-ink/60 hover:bg-ink/5"
                   }`}
                 >

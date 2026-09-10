@@ -169,7 +169,7 @@ export default function ReportPage() {
             maxLength={5000}
             disabled={submitting}
             placeholder="e.g. Water is leaking from the ceiling in the Block A hostel corridor and the floor is soaked."
-            className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm text-ink outline-none transition-colors placeholder:text-ink/30 focus:border-signal disabled:opacity-60"
+            className="w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink outline-none transition-colors placeholder:text-ink/30 focus:border-signal disabled:opacity-60"
           />
           <p className="text-right font-mono text-[11px] text-ink/35">
             {description.length}/5000
@@ -183,7 +183,7 @@ export default function ReportPage() {
               value={building}
               onChange={(e) => setBuilding(e.target.value)}
               disabled={submitting}
-              className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-signal disabled:opacity-60"
+              className="w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-signal disabled:opacity-60"
             >
               <option value="">Select a building</option>
               {BUILDING_NAMES.map((b) => (
@@ -203,7 +203,7 @@ export default function ReportPage() {
               onChange={(e) => setRoom(e.target.value)}
               disabled={submitting}
               placeholder="e.g. Room 214"
-              className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm text-ink outline-none placeholder:text-ink/30 focus:border-signal disabled:opacity-60"
+              className="w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink outline-none placeholder:text-ink/30 focus:border-signal disabled:opacity-60"
             />
           </Field>
         </div>
@@ -245,7 +245,7 @@ export default function ReportPage() {
             onChange={(e) => setStudentIdState(e.target.value)}
             disabled={submitting}
             placeholder="student_a"
-            className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 font-mono text-sm text-ink outline-none focus:border-signal disabled:opacity-60"
+            className="w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 font-mono text-sm text-ink outline-none focus:border-signal disabled:opacity-60"
           />
           <p className="text-xs text-ink/45">
             Recurring issues are counted per <em>student</em>, not per report —
@@ -267,7 +267,7 @@ export default function ReportPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="rounded-lg bg-signal px-5 py-2.5 font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-lg bg-signal-fill px-5 py-2.5 font-medium text-on-signal transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? "Analyzing…" : "Submit report"}
           </button>
@@ -360,7 +360,7 @@ function SubmissionResult({
         </p>
       </header>
 
-      <section className="rounded-xl border border-ink/10 bg-white p-5">
+      <section className="rounded-xl border border-ink/10 bg-surface p-5">
         <h2 className="font-mono text-xs uppercase tracking-widest text-ink/50">
           What the AI understood
         </h2>
@@ -392,7 +392,7 @@ function SubmissionResult({
         )}
       </section>
 
-      <section className="rounded-xl border border-ink/10 bg-white p-5">
+      <section className="rounded-xl border border-ink/10 bg-surface p-5">
         <h2 className="font-mono text-xs uppercase tracking-widest text-ink/50">
           Why this priority
         </h2>
@@ -408,7 +408,7 @@ function SubmissionResult({
       <div className="flex flex-wrap gap-3">
         <Link
           href={`/track/${complaint.id}`}
-          className="rounded-lg bg-ink px-5 py-2.5 font-medium text-white"
+          className="rounded-lg bg-ink px-5 py-2.5 font-medium text-paper"
         >
           Track this report
         </Link>
