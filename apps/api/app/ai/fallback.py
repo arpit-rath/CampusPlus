@@ -6,7 +6,7 @@ Wraps any `AIProvider` and, for every call:
 2. on timeout / rate limit / API error / malformed output, re-runs the
    same call against a fallback provider (`MockProvider`).
 
-This is CLAUDE.md's "MockProvider is the automatic fallback when a live
+This is AGENTS.md's "MockProvider is the automatic fallback when a live
 call errors or times out, not just a dev convenience". Nothing downstream
 — routers, the pipeline — needs its own try/except around a provider call,
 which is exactly the point: there is one place that decides what "the AI

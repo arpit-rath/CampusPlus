@@ -13,7 +13,7 @@ falls over the moment the table is real — and it left the HNSW index
 completely unused. Here the ordering and the top-N cut happen in Postgres,
 which is what the index is for.
 
-Scoping follows CLAUDE.md exactly: same `category_id`, same
+Scoping follows AGENTS.md exactly: same `category_id`, same
 `location_building`, and a rolling window (default 14 days). Resolved
 complaints are excluded — merging a live report into something maintenance
 already fixed is worse than opening a new one.
@@ -57,12 +57,12 @@ async def find_similar_complaints(
 
     Uses pgvector's cosine distance operator (`<=>`), which the
     `ix_complaint_embeddings_embedding_hnsw_cosine` index is built for.
-    Cosine *similarity* — what CLAUDE.md's 0.92/0.75 thresholds are
+    Cosine *similarity* — what AGENTS.md's 0.92/0.75 thresholds are
     expressed in — is `1 - distance`, computed here so callers only ever
     deal in similarity.
 
     Returns an empty list when `category_id` or `location_building` is
-    unknown: without both, the scope CLAUDE.md defines does not exist, and
+    unknown: without both, the scope AGENTS.md defines does not exist, and
     silently widening it would let a WiFi complaint merge into a plumbing
     one.
     """
@@ -112,7 +112,7 @@ async def find_similar_complaints(
 async def count_independent_students(db: AsyncSession, cluster_id: uuid.UUID) -> int:
     """DISTINCT students represented in a cluster.
 
-    This is the number CLAUDE.md's recurring rule is actually about ("a
+    This is the number AGENTS.md's recurring rule is actually about ("a
     cluster crossing 3 independent students"), as opposed to `member_count`,
     which counts submissions. A complaint with no `student_id` is counted as
     its own independent reporter — an anonymous report is still a distinct

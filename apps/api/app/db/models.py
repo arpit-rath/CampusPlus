@@ -1,4 +1,4 @@
-"""SQLAlchemy models — the six tables from CLAUDE.md's "Data model" section.
+"""SQLAlchemy models — the six tables from AGENTS.md's "Data model" section.
 
 This is the source of truth for column names/types; the Alembic migration
 in `app/db/migrations/versions/0001_init.py` must stay in lockstep with it
@@ -6,7 +6,7 @@ in `app/db/migrations/versions/0001_init.py` must stay in lockstep with it
 pipeline code and the frontend's `apps/web/src/lib/api.ts` both assume
 these exact names — don't rename anything here without updating both.
 
-Notes on a couple of deliberate choices not spelled out in CLAUDE.md:
+Notes on a couple of deliberate choices not spelled out in AGENTS.md:
 - All primary keys are `UUID` (server-generated via Postgres's built-in
   `gen_random_uuid()`, available without an extension since PG13) rather
   than integers, since `Complaint.id` is consumed as an opaque string by
@@ -123,7 +123,7 @@ class Complaint(Base):
     photo_matches_text: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     priority_score: Mapped[float | None] = mapped_column(Float, nullable=True, default=0.0)
 
-    # CLAUDE.md: "All four terms get stored per-complaint (not just the
+    # AGENTS.md: "All four terms get stored per-complaint (not just the
     # final number) so the UI can render a 4-segment breakdown bar instead
     # of an opaque score." These are the already-weighted contributions and
     # sum to priority_score.

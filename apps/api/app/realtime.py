@@ -1,6 +1,6 @@
 """In-process pub/sub behind the `/ws/complaints` websocket.
 
-CLAUDE.md's realtime section allows two shapes: Supabase Realtime when the
+AGENTS.md's realtime section allows two shapes: Supabase Realtime when the
 database is hosted there, or "a plain `/ws/complaints` fallback so the
 frontend isn't hard-coupled to one provider". This is that fallback, and on
 a laptop-hosted Postgres it is the only one available — Supabase Realtime

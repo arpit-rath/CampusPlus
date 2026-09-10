@@ -4,7 +4,7 @@ suggested merges, independent-student counts
 Everything here backs a behaviour the implementation plan asks for that the
 initial schema had no column for:
 
-- `complaints.priority_*` — CLAUDE.md is explicit that "all four terms get
+- `complaints.priority_*` — AGENTS.md is explicit that "all four terms get
   stored per-complaint (not just the final number) so the UI can render a
   4-segment breakdown bar". They were being recomputed on every read and
   never persisted, which meant nothing could sort or filter on a single

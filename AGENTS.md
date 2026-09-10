@@ -1,4 +1,4 @@
-# CLAUDE.md — CampusPlus
+# AGENTS.md — CampusPlus
 
 Read this before working anywhere in the repo. It is the shared contract
 every session builds against, so nobody re-derives the schema or invents a

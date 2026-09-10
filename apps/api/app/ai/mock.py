@@ -1,7 +1,7 @@
 """`MockProvider` — deterministic, dependency-free stand-in for Gemini.
 
 This is what the whole team develops against most of the time (per
-CLAUDE.md, `LLM_PROVIDER=mock` is the dev default) and what a live demo
+AGENTS.md, `LLM_PROVIDER=mock` is the dev default) and what a live demo
 falls back to if a real Gemini call errors or times out. Both understanding
 and embedding are cheap, pure-Python, and fully deterministic — same input
 always produces the same output, no network, no API key.
@@ -24,7 +24,7 @@ X, can't connect" vs "no wifi signal in X, network unreachable") land
 close together in cosine similarity even though most of the surrounding
 sentence differs — which is what makes `scripts/seed_demo.py`'s
 near-duplicate WiFi/electrical clusters actually clear the >=0.92
-duplicate threshold from CLAUDE.md under the mock provider, not just under
+duplicate threshold from AGENTS.md under the mock provider, not just under
 a real embedding model. Not a real semantic embedding — but a real
 768-float unit vector with a deliberately useful notion of "closer" for
 demo/test purposes.

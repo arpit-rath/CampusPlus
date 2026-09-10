@@ -17,7 +17,7 @@ CampusPlus more than a ticket form happens here, in one readable sequence:
 Two decisions worth stating up front, because they are the ones a reader
 will want to argue with:
 
-**Cluster size means independent students, not submissions.** CLAUDE.md
+**Cluster size means independent students, not submissions.** AGENTS.md
 writes the frequency term as `log1p(cluster_size)`, and the recurring rule
 as "3 independent students". Using two different notions of size for two
 adjacent rules would be a trap: one student spamming the same complaint

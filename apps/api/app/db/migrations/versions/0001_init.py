@@ -1,10 +1,10 @@
 """init: six-table schema, pgvector extension + HNSW index, seed data
 
-Creates the schema described in CLAUDE.md's "Data model" section:
+Creates the schema described in AGENTS.md's "Data model" section:
 departments, categories, complaints, complaint_embeddings,
 complaint_clusters, status_events. Also enables the `vector` extension,
 adds an HNSW cosine-distance index on `complaint_embeddings.embedding`
-(the index type CLAUDE.md's similarity/clustering section assumes), and
+(the index type AGENTS.md's similarity/clustering section assumes), and
 seeds a starter set of departments + categories so the API is usable
 without a separate seed script.
 
@@ -142,7 +142,7 @@ def upgrade() -> None:
         ),
         sa.Column("embedding", Vector(EMBEDDING_DIM), nullable=False),
     )
-    # HNSW index for cosine-distance similarity search (CLAUDE.md's
+    # HNSW index for cosine-distance similarity search (AGENTS.md's
     # similarity thresholds are expressed as cosine similarity).
     op.execute(
         "CREATE INDEX ix_complaint_embeddings_embedding_hnsw_cosine "

@@ -1,6 +1,6 @@
 """Tests for `app.pipeline.priority` — the explainable priority formula.
 
-Every case here is hand-computed against CLAUDE.md's formula:
+Every case here is hand-computed against AGENTS.md's formula:
 
     priority = 0.40*severity_score + 0.30*log1p(cluster_size)/log1p(CLUSTER_CAP)
              + 0.20*safety_flag + 0.10*sla_age_factor

@@ -1,7 +1,7 @@
 """Async SQLAlchemy engine + session setup.
 
 Reads `DATABASE_URL` from `app.config.get_settings()` — nothing here should
-read the env directly (see CLAUDE.md's config convention). Import `get_db`
+read the env directly (see AGENTS.md's config convention). Import `get_db`
 as a FastAPI dependency to get an `AsyncSession` scoped to one request.
 """
 

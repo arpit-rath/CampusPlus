@@ -1,6 +1,6 @@
 """The `AIProvider` protocol and the factory that picks a concrete one.
 
-Per CLAUDE.md: **never import a provider SDK (google-genai, openai, ...)
+Per AGENTS.md: **never import a provider SDK (google-genai, openai, ...)
 from a router or pipeline module.** Always go through `get_provider()`
 here. This keeps the system provider-agnostic and demo-safe.
 
@@ -95,8 +95,8 @@ def get_provider() -> AIProvider:
       installed), wrapped in `FallbackProvider` unless
       `LLM_FALLBACK_TO_MOCK=false`.
     - `"mock"` (default) -> `MockProvider`.
-    - anything else (e.g. the `openai`/`claude` stubs mentioned in
-      CLAUDE.md) -> falls back to `MockProvider`; there is nothing to route
+    - anything else (e.g. the `openai`/`anthropic` stubs mentioned in
+      AGENTS.md) -> falls back to `MockProvider`; there is nothing to route
       to yet.
     """
     settings = get_settings()

@@ -1,9 +1,9 @@
 # CampusPlus — Hackathon Build Plan
 
 Designed version with diagrams and a visual timeline:
-https://claude.ai/code/artifact/8d2a706b-f264-41aa-9b11-3f76a6e462a4
+(internal design artifact)
 
-Prepared for: 36–48 hour hackathon, team of 3–4, building mostly via Claude
+Prepared for: 36-48 hour hackathon, team of 3-4, building mostly with AI coding
 Code. Stack: Next.js + FastAPI + Postgres/pgvector. AI: Gemini as primary
 provider (free tier) behind a swappable `AIProvider` interface
 (`LLM_PROVIDER` env var).
@@ -26,7 +26,7 @@ straight to the browser — no polling.
 
 ## 3. Data model
 
-See `CLAUDE.md` for the six-table schema; full DDL is in
+See `AGENTS.md` for the six-table schema; full DDL is in
 `apps/api/app/db/migrations/versions/0001_init.py`.
 
 ## 4. Intelligence pipeline
@@ -38,7 +38,7 @@ See `CLAUDE.md` for the six-table schema; full DDL is in
    truncated to 768 dims, embedded on the AI's normalized summary, not raw
    text.
 3. **Similarity search** — pgvector cosine, scoped to same category +
-   building + 14-day window. Thresholds in `CLAUDE.md`.
+   building + 14-day window. Thresholds in `AGENTS.md`.
 4. **Recurring detection** — connected components over the similarity
    graph; ≥3 independent students → `is_recurring = true`.
 5. **Priority scoring** — explainable 4-term weighted formula, shown as a
@@ -92,13 +92,13 @@ campusplus/
 ├─ packages/shared-types/
 ├─ scripts/seed_demo.py
 ├─ docs/build-plan.md
-└─ CLAUDE.md
+└─ AGENTS.md
 ```
 
-## 10. Claude Code playbook
+## 10. AI pair-programming playbook
 
-- `CLAUDE.md` at repo root, read before any track starts.
-- One Claude Code session (or worktree) per track, kicked off with a
+- `AGENTS.md` at repo root, read before any track starts.
+- One AI coding session (or worktree) per track, kicked off with a
   concrete first prompt, not a vague one.
 - Integration lead pass at hour 16 and hour 36 — a session reviews the
   cross-track diff specifically for API-contract mismatches.

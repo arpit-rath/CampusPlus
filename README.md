@@ -7,7 +7,7 @@ first — and explains every one of those decisions.
 
 The complaint form is not the product. The intelligence layer is.
 
-**Read [`CLAUDE.md`](CLAUDE.md) before touching anything** — it is the shared
+**Read [`AGENTS.md`](AGENTS.md) before touching anything** — it is the shared
 contract (schema, AI provider interface, priority formula, thresholds,
 security rules). Full build plan: [`docs/build-plan.md`](docs/build-plan.md).
 

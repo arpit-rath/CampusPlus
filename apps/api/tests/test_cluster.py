@@ -219,7 +219,7 @@ def test_cluster_embeddings_every_id_appears_exactly_once():
 
 # --- independent-student counting ----------------------------------------
 #
-# CLAUDE.md's recurring rule counts *students*, not submissions. These pin
+# AGENTS.md's recurring rule counts *students*, not submissions. These pin
 # the anti-gaming property: one person cannot manufacture a recurring issue.
 
 

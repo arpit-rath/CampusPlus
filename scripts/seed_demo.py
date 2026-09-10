@@ -111,7 +111,7 @@ RAW_COMPLAINTS: list[RawComplaint] = [
     # naturally converge on very similar wording: "wifi is down", "can't
     # connect", "the network") and, under MockProvider's keyword-weighted
     # embedding, is what reliably pushes pairwise cosine similarity past
-    # CLAUDE.md's 0.92 duplicate threshold so this cluster actually forms
+    # AGENTS.md's 0.92 duplicate threshold so this cluster actually forms
     # when this script is run against the mock provider. See the
     # `_SIGNAL_WEIGHT` note in `app/ai/mock.py` for why word choice this
     # deliberate is required to trip the threshold under a hashing-trick
@@ -373,7 +373,7 @@ async def _build_complaint(index: int, raw: RawComplaint, provider: MockProvider
 
 
 def _scope_key(complaint: dict) -> tuple[str, str]:
-    """CLAUDE.md's clustering scope: same category + same building.
+    """AGENTS.md's clustering scope: same category + same building.
 
     (The rolling 14-day window is irrelevant here — every demo complaint is
     within hours of DEMO_START.)
@@ -384,7 +384,7 @@ def _scope_key(complaint: dict) -> tuple[str, str]:
 def _attach_clusters_and_priority(complaints: list[dict], recurring_threshold: int) -> None:
     """Mutates `complaints` in place: adds cluster_id/is_recurring/cluster_
     member_count/priority_score/priority_breakdown, using the real
-    `cluster.py`/`priority.py` pipeline scoped per CLAUDE.md's rules.
+    `cluster.py`/`priority.py` pipeline scoped per AGENTS.md's rules.
     """
     by_scope: dict[tuple[str, str], list[dict]] = {}
     for c in complaints:

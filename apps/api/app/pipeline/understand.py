@@ -12,7 +12,7 @@ start a new one).
 out here since Track B doesn't own that router file):
 
 - `existing_embeddings` must already be scoped by the caller per
-  CLAUDE.md's similarity-search rule: same `location_building` + rolling
+  AGENTS.md's similarity-search rule: same `location_building` + rolling
   14-day window. Category scoping is the one wrinkle — the AI-derived
   `category` isn't known until *inside* this call, so the cleanest
   options for the caller are (a) scope candidates by building + window

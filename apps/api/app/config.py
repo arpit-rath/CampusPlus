@@ -2,7 +2,7 @@
 
 Nothing in this codebase should call os.environ directly outside this file;
 route every config value through `Settings` so there's one place that knows
-what env vars exist (CLAUDE.md's contract for the AI provider depends on
+what env vars exist (AGENTS.md's contract for the AI provider depends on
 LLM_PROVIDER being read from here, not scattered os.getenv() calls).
 
 The similarity thresholds, the priority formula's constants and the
@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://campusplus:campusplus@localhost:5432/campusplus"
 
     # --- AI provider ---------------------------------------------------
-    llm_provider: str = "mock"  # "mock" | "gemini" (openai/claude stubbed)
+    llm_provider: str = "mock"  # "mock" | "gemini" (other providers stubbed)
     llm_api_key: str = ""
     gemini_model: str = "gemini-3.8-flash"
     # Tried in order when the primary model returns a retryable error. The
@@ -45,10 +45,10 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = 20.0
     # When true (the default), a `gemini` provider that errors or times out
     # transparently falls back to MockProvider instead of 500-ing the
-    # request — CLAUDE.md's "automatic fallback, not just a dev toggle".
+    # request — AGENTS.md's "automatic fallback, not just a dev toggle".
     llm_fallback_to_mock: bool = True
 
-    # --- Similarity / clustering (CLAUDE.md thresholds) -----------------
+    # --- Similarity / clustering (AGENTS.md thresholds) -----------------
     duplicate_threshold: float = 0.92
     suggested_merge_threshold: float = 0.75
     similarity_window_days: int = 14

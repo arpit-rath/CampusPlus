@@ -1,7 +1,7 @@
 """Structured-output schema for the AI "understand a complaint" call.
 
 This is the source of truth for what `category`, `severity`, and
-`safety_flag` mean everywhere else in the codebase (per CLAUDE.md) — don't
+`safety_flag` mean everywhere else in the codebase (per AGENTS.md) — don't
 redefine these ad hoc in a router or another pipeline module.
 
 Two things live here, kept in lockstep:

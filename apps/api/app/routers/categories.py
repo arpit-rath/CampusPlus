@@ -1,7 +1,7 @@
 """CRUD router for `categories`.
 
 Reference data mapping a category slug (wifi, electrical, sanitation, ...)
-to its default department. `category.slug` is the value CLAUDE.md's AI
+to its default department. `category.slug` is the value AGENTS.md's AI
 schema (`app/ai/schemas.py`, Track B) is expected to emit for `category`
 — this router just persists/serves the mapping, it doesn't classify
 anything.

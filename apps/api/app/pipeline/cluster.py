@@ -4,12 +4,12 @@ Everything here takes plain lists/tuples of floats (or of `(id, embedding)`
 pairs) and returns similarity/grouping decisions. Callers (routers, the
 `understand.py` orchestrator) are responsible for scoping candidates to
 "same category + same building + rolling 14-day window" *before* calling
-into this module (per CLAUDE.md's similarity-search section) — this module
+into this module (per AGENTS.md's similarity-search section) — this module
 has no idea what a category or a building is, on purpose, so it stays
 trivially unit-testable and reusable for the pgvector-backed path and for
 `scripts/seed_demo.py`'s offline fixture generation alike.
 
-Thresholds (CLAUDE.md):
+Thresholds (AGENTS.md):
     >= 0.92        -> "duplicate" (auto-merge into the existing complaint)
     0.75 - 0.92    -> "suggested_merge" (surfaced to an admin, not auto-applied)
     < 0.75         -> "new" (independent complaint)
@@ -63,7 +63,7 @@ def classify_similarity(
     duplicate_threshold: float = DUPLICATE_THRESHOLD,
     suggested_merge_threshold: float = SUGGESTED_MERGE_THRESHOLD,
 ) -> SimilarityLabel:
-    """Bucket a cosine similarity score per CLAUDE.md's thresholds.
+    """Bucket a cosine similarity score per AGENTS.md's thresholds.
 
     >= duplicate_threshold        -> "duplicate"
     >= suggested_merge_threshold  -> "suggested_merge"
@@ -109,7 +109,7 @@ def cluster_embeddings(
 
     Two items are joined by an edge when their cosine similarity clears
     `duplicate_threshold` (i.e. `classify_similarity` would call them
-    "duplicate" of each other) — this mirrors CLAUDE.md's ">= 0.92 ->
+    "duplicate" of each other) — this mirrors AGENTS.md's ">= 0.92 ->
     auto-merge" rule, generalized from "compare one new complaint against
     existing ones" to "group a whole batch at once" (used by
     `scripts/seed_demo.py` to sanity-check the generated fixture, and
@@ -168,7 +168,7 @@ def count_independent_students(
 ) -> int:
     """Distinct reporters among `(complaint_id, student_id)` pairs.
 
-    CLAUDE.md's recurring rule is about *independent students*, not about
+    AGENTS.md's recurring rule is about *independent students*, not about
     submissions: a cluster is recurring once three different people have
     reported it. Counting rows instead would let one frustrated student
     reporting the same broken cooler five times manufacture a campus-wide

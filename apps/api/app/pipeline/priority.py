@@ -1,4 +1,4 @@
-"""Explainable priority scoring — CLAUDE.md's 4-term weighted formula.
+"""Explainable priority scoring — AGENTS.md's 4-term weighted formula.
 
     priority = 0.40 * severity_score
              + 0.30 * log1p(cluster_size) / log1p(CLUSTER_CAP)
@@ -21,7 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from math import log1p
 
-# Weights from CLAUDE.md — keep these named constants in sync with the doc
+# Weights from AGENTS.md — keep these named constants in sync with the doc
 # if the formula ever changes; nothing else in this file should hardcode
 # 0.40/0.30/0.20/0.10.
 SEVERITY_WEIGHT = 0.40
@@ -33,7 +33,7 @@ SLA_AGE_WEIGHT = 0.10
 # which the frequency term saturates near 1.0. 20 is a deliberately high
 # ceiling for a single-campus hackathon demo — a cluster this big is
 # already very obviously a big deal, and log1p keeps the curve concave so
-# the jump from 1->3 students (the recurring-threshold in CLAUDE.md)
+# the jump from 1->3 students (the recurring-threshold in AGENTS.md)
 # already moves the needle a lot.
 CLUSTER_CAP = 20
 
