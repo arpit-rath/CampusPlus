@@ -78,6 +78,44 @@ _NUMERIC_WINDOW_RE = re.compile(r"\b(?:last|past)\s+(\d{1,3})\s*(day|week|month)
 _MAX_RECORDS_TO_MODEL = 25
 _MAX_RECORDS_TO_FETCH = 200
 
+# --- scope gate ---------------------------------------------------------
+#
+# Words that make a question unambiguously about *this* corpus. A question
+# that matches none of them, and that also produced no typed filter, is not
+# a question about campus complaints and is refused before any rows are
+# fetched or any model is called.
+#
+# "problem" and "issue" are deliberately absent. They are ordinary English
+# nouns, and treating them as domain evidence is exactly how "can you solve
+# python problems for me" came back with a summary of the complaint queue.
+# They still reach the corpus in a real question, because a real one carries
+# something else with it — a category, a building, a status, a time window,
+# or one of the nouns below.
+_DOMAIN_WORDS: tuple[str, ...] = (
+    "complaint", "complaints", "complain", "complained", "grievance", "grievances",
+    "report", "reports", "reported", "ticket", "tickets", "queue", "backlog",
+    "cluster", "clusters", "recurring", "duplicate", "duplicates", "merge", "merged",
+    "priority", "priorities", "severity", "urgency", "escalate", "escalated", "sla",
+    "campus", "building", "buildings", "hostel", "dorm", "block", "room", "rooms",
+    "floor", "basement", "corridor", "classroom", "lab", "laboratory", "library",
+    "cafeteria", "canteen", "mess", "washroom", "toilet", "hall",
+    "facilities", "maintenance", "janitor", "plumbing", "repair", "repairs",
+    "department", "departments", "student", "students", "reporter", "reporters",
+    "resolved", "unresolved", "outstanding", "triage",
+)
+
+_OUT_OF_SCOPE_ANSWER = (
+    "I can't answer that — I only answer questions about the campus "
+    "complaints recorded in this system, using those records and nothing "
+    "else. Please retype your question so it asks about complaints, a "
+    "building, a category (wifi, electrical, sanitation, infrastructure, "
+    "academics), a status, or a time window. For example: "
+    '"any safety issues this week?" or '
+    '"what wifi complaints are still open in Innovation Hall?"'
+)
+
+_OUT_OF_SCOPE_FILTERS = "out of scope — not a question about campus complaints"
+
 
 def _mentions(text: str, phrase: str) -> bool:
     """Whole-word/phrase containment.
@@ -156,6 +194,23 @@ def extract_filters(question: str, known_buildings: list[str]) -> QueryFilters:
         filters.window_days = amount * {"day": 1, "week": 7, "month": 30}[unit]
 
     return filters
+
+
+def is_in_scope(question: str, filters: QueryFilters) -> bool:
+    """Whether a question is about the complaint corpus at all.
+
+    Evidence is either a typed filter the question already produced — a real
+    category, a real building, a status, a window — or one of the domain
+    nouns above. Both are conservative on purpose: a legitimate question that
+    is turned away costs a rephrase, while an off-topic one that gets through
+    produces a confident answer to a question nobody asked, which is the more
+    expensive failure for a tool whose whole claim is that it only speaks
+    from records.
+    """
+    if filters != QueryFilters():
+        return True
+    text = question.lower()
+    return any(_mentions(text, word) for word in _DOMAIN_WORDS)
 
 
 async def fetch_records(
@@ -289,6 +344,19 @@ async def answer_admin_question(
     that was actually in the filtered result set.
     """
     requested = extract_filters(question, await known_buildings(db))
+
+    # Refused before any query runs and before the model is called: an
+    # off-topic question has no rows to be grounded in, so anything said
+    # about it would be the one thing this endpoint promises never to do.
+    if not is_in_scope(question, requested):
+        return {
+            "answer": _OUT_OF_SCOPE_ANSWER,
+            "cited_complaint_ids": [],
+            "filters": _OUT_OF_SCOPE_FILTERS,
+            "matched_count": 0,
+            "in_scope": False,
+        }
+
     records, filters, dropped = await _fetch_with_relaxation(db, requested)
 
     if not records:
@@ -302,6 +370,7 @@ async def answer_admin_question(
             "cited_complaint_ids": [],
             "filters": requested.describe(),
             "matched_count": 0,
+            "in_scope": True,
         }
 
     shown = records[:_MAX_RECORDS_TO_MODEL]
@@ -344,4 +413,5 @@ async def answer_admin_question(
         "cited_complaint_ids": cited,
         "filters": description,
         "matched_count": len(records),
+        "in_scope": True,
     }

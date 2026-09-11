@@ -39,14 +39,30 @@ docs/         Build plan
 
 Open the **`CampusPlus` folder** as the workspace root (not `Documents`).
 
-Press `Ctrl+Shift+P` -> **Tasks: Run Task** -> **Start everything**. That runs
-three tasks in order and leaves each in its own terminal tab:
+Press `Ctrl+Shift+P` -> **Tasks: Run Task** -> **Start everything**, or run the
+same thing from a terminal:
 
-| Task | What it does | URL |
+```powershell
+.\scripts\dev.ps1
+```
+
+It starts three things and, importantly, does not claim success until each one
+has actually answered:
+
+| Step | What it does | URL |
 |---|---|---|
-| 1: Database (Docker) | Postgres 16 + pgvector, waits for healthy | `localhost:5432` |
-| 2: API (FastAPI) | Owns every DB write and AI call | http://localhost:8000 |
-| 3: Web (Next.js) | Student flow + admin dashboard | http://localhost:3000 |
+| Database (Docker) | Postgres 16 + pgvector, waits for healthy | `localhost:5432` |
+| API (FastAPI) | Owns every DB write and AI call | http://localhost:8000 |
+| Web (Next.js) | Student flow + admin dashboard | http://localhost:3000 |
+
+Anything already running is left alone, so it is safe to re-run — which is the
+fix if the dashboard ever says **"Can't reach the API"**: run it again and it
+starts only the missing piece. If something is genuinely broken it stops on
+that step and prints what to do (Docker not started, port 8000 taken, no
+`.env`). The API and web app each get their own window, so their logs are
+still there to read.
+
+Add `-Seed` to load the demo complaints, or `-ApiOnly` to skip the web app.
 
 Then run the **Seed demo data** task once to populate the dashboard.
 

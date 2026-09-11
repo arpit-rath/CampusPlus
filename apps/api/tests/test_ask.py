@@ -13,7 +13,7 @@ fetch.
 
 from __future__ import annotations
 
-from app.pipeline.ask import QueryFilters, extract_filters
+from app.pipeline.ask import QueryFilters, extract_filters, is_in_scope
 
 BUILDINGS = ["Innovation Hall", "Hostel Block B", "Main Library"]
 
@@ -119,3 +119,51 @@ def test_urgent_is_about_priority_not_a_safety_filter():
     # Genuinely safety-shaped wording still filters.
     assert extract_filters("any dangerous problems", BUILDINGS).safety_only is True
     assert extract_filters("show me safety issues", BUILDINGS).safety_only is True
+
+
+# --- the scope gate -----------------------------------------------------
+#
+# Reported from the running dashboard: "Hi can you solve python problems for
+# me" came back with a confident breakdown of the complaint queue, because
+# nothing in the question matched a filter and "no filters" means "every
+# complaint". A tool whose entire claim is that it only speaks from records
+# must not answer a question that is not about those records.
+
+
+def _scoped(question: str) -> bool:
+    return is_in_scope(question, extract_filters(question, BUILDINGS))
+
+
+def test_off_topic_questions_are_out_of_scope():
+    assert _scoped("Hi can you solve python problems for me") is False
+    assert _scoped("write me a poem about rain") is False
+    assert _scoped("what is the capital of France") is False
+    assert _scoped("hello") is False
+    assert _scoped("can you write python code to sort a list") is False
+
+
+def test_a_question_that_produced_any_filter_is_in_scope():
+    """A typed filter is proof the question landed in our own vocabulary."""
+    assert _scoped("what wifi complaints are still open?") is True
+    assert _scoped("anything in Innovation Hall?") is True
+    assert _scoped("any safety issues this week?") is True
+    assert _scoped("how many came in today") is True
+
+
+def test_domain_wording_alone_is_enough():
+    """No filter, but unmistakably about this corpus."""
+    assert extract_filters("whats the worst problem on campus", BUILDINGS) == QueryFilters()
+    assert _scoped("whats the worst problem on campus") is True
+    assert _scoped("how many reports are there") is True
+    assert _scoped("which department has the most work") is True
+
+
+def test_problem_and_issue_alone_are_not_domain_evidence():
+    """The two words that let the original question through.
+
+    Both are ordinary English nouns. A real question about the corpus always
+    carries something else with it — a category, a building, a status, a
+    window, or a domain noun.
+    """
+    assert _scoped("can you solve these problems") is False
+    assert _scoped("I have an issue") is False

@@ -203,6 +203,9 @@ export interface AskAnswer {
    *  filtering is auditable rather than magic. */
   filters: string;
   matched_count: number;
+  /** False when the question was not about campus complaints at all, so the
+   *  answer is a refusal rather than a finding. */
+  in_scope?: boolean;
 }
 
 export interface AdminStats {

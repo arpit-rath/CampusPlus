@@ -49,6 +49,10 @@ class AskResponse(BaseModel):
     """How the question was interpreted, shown alongside the answer so the
     filtering is auditable rather than magic."""
     matched_count: int
+    in_scope: bool = True
+    """False when the question was not about campus complaints at all. The
+    answer is then a refusal, and the client shows it as one rather than as
+    a finding about the corpus."""
 
 
 @router.post("/ask", response_model=AskResponse)

@@ -118,7 +118,37 @@ export function AskCampusPlus({ complaints }: { complaints: Complaint[] }) {
         </p>
       )}
 
-      {answer && !asking && (
+      {/* An out-of-scope question gets a refusal, not an answer — so it is
+          styled as one, and the examples stay on screen to rephrase from.
+          Rendering it in the answer slot would make a refusal look like a
+          finding about the corpus. */}
+      {answer && answer.in_scope === false && !asking && (
+        <div className="mt-3 flex flex-col gap-3">
+          <div className="rounded-lg border border-signal/40 bg-signal/5 px-3 py-2.5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-signal-ink">
+              Out of scope
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-ink/80">{answer.answer}</p>
+          </div>
+          <ul className="flex flex-col gap-1.5">
+            {EXAMPLES.map((example) => (
+              <li key={example}>
+                <button
+                  onClick={() => {
+                    setQuestion(example);
+                    ask(example);
+                  }}
+                  className="w-full rounded-md border border-ink/10 px-2.5 py-1.5 text-left text-xs text-ink/60 transition-colors hover:border-ink/25 hover:text-ink"
+                >
+                  {example}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {answer && answer.in_scope !== false && !asking && (
         <div className="mt-3 flex min-h-0 flex-1 flex-col gap-2">
           <p className="text-sm leading-relaxed text-ink">{answer.answer}</p>
 

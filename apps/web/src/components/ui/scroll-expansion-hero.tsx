@@ -69,7 +69,21 @@ const ScrollExpandMedia = ({
   const touchStartY = useRef(0);
   const sectionRef = useRef<HTMLDivElement | null>(null);
 
+  // Set once the intro has played through. The idle failsafe below reads it
+  // so that deliberately scrolling back up to replay the animation is not
+  // immediately undone by the timer snapping the media open again.
+  const hasExpandedOnce = useRef(false);
+
+  // Progress is mirrored in a ref because `advance` runs from a listener
+  // that closes over the state value. Several wheel events inside one React
+  // batch would all read the same stale progress and only the last would
+  // count, so a fast flick moved the animation about as far as a single
+  // tick. The ref always holds the live value.
+  const progressRef = useRef(0);
+
   const expandNow = useCallback(() => {
+    hasExpandedOnce.current = true;
+    progressRef.current = 1;
     setScrollProgress(1);
     setMediaFullyExpanded(true);
     setShowContent(true);
@@ -88,11 +102,19 @@ const ScrollExpandMedia = ({
     return () => query.removeEventListener("change", apply);
   }, [expandNow]);
 
+  // Viewport is tracked, not just a mobile boolean, because the card's size
+  // has to be computed against the real available height to keep its aspect
+  // ratio (see `mediaWidth` below).
+  const [viewport, setViewport] = useState({ w: 1280, h: 800 });
+
   useEffect(() => {
-    const checkIfMobile = () => setIsMobileState(window.innerWidth < 768);
-    checkIfMobile();
-    window.addEventListener("resize", checkIfMobile);
-    return () => window.removeEventListener("resize", checkIfMobile);
+    const measure = () => {
+      setIsMobileState(window.innerWidth < 768);
+      setViewport({ w: window.innerWidth, h: window.innerHeight });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
   }, []);
 
   useEffect(() => {
@@ -100,10 +122,15 @@ const ScrollExpandMedia = ({
 
     let idleTimer: number | undefined;
 
-    // Failsafe: if nothing moves the progress for a while, stop holding the
-    // page. A hero that will not let go is worse than one that does not
-    // animate.
+    // Failsafe for the *first* pass only: if nothing moves the progress for
+    // a while, stop holding the page. A hero that will not let go is worse
+    // than one that does not animate.
+    //
+    // It deliberately stops arming once the intro has played, otherwise
+    // scrolling back up to watch the animation in reverse would be fought
+    // by a timer forcing the media open again six seconds later.
     const armIdleRelease = () => {
+      if (hasExpandedOnce.current) return;
       window.clearTimeout(idleTimer);
       idleTimer = window.setTimeout(() => {
         if (!mediaFullyExpanded) expandNow();
@@ -112,9 +139,15 @@ const ScrollExpandMedia = ({
     armIdleRelease();
 
     const advance = (delta: number) => {
-      const next = Math.min(Math.max(scrollProgress + delta, 0), 1);
+      const next = Math.min(Math.max(progressRef.current + delta, 0), 1);
+      progressRef.current = next;
       setScrollProgress(next);
       if (next >= 1) {
+        // Also marks the intro as seen. Only `expandNow` used to do this,
+        // so an expansion completed by scrolling — the normal path — left
+        // the idle failsafe armed. Rewinding then got snapped back to fully
+        // open six seconds later, which looked like the reverse was broken.
+        hasExpandedOnce.current = true;
         setMediaFullyExpanded(true);
         setShowContent(true);
       } else if (next < 0.75) {
@@ -124,12 +157,20 @@ const ScrollExpandMedia = ({
     };
 
     const handleWheel = (e: globalThis.WheelEvent) => {
-      // Deliberately one-way. The original also collapsed back whenever you
-      // scrolled up near the top, which combined with the scrollTo(0, 0)
-      // below to yank the reader back to the hero from anywhere on the page
-      // — reached the footer, scrolled up, and the intro replayed from
-      // scratch. An intro is worth watching once.
-      if (mediaFullyExpanded) return;
+      // Scrolling up while already at the very top re-enters the animation,
+      // which then plays in reverse as `advance` takes negative deltas.
+      //
+      // The `scrollY <= 2` guard is what makes this safe. An earlier version
+      // used a looser check and, combined with the scrollTo(0, 0) below,
+      // would grab a reader who was halfway down the page and yank them back
+      // to the hero. Re-entry has to require actually being at the top.
+      if (mediaFullyExpanded) {
+        if (e.deltaY < 0 && window.scrollY <= 2) {
+          setMediaFullyExpanded(false);
+          e.preventDefault();
+        }
+        return;
+      }
       e.preventDefault();
       advance(e.deltaY * 0.0009);
     };
@@ -143,7 +184,15 @@ const ScrollExpandMedia = ({
       const touchY = e.touches[0].clientY;
       const deltaY = touchStartY.current - touchY;
 
-      if (mediaFullyExpanded) return;
+      // Same re-entry rule as the wheel: an upward swipe while already at
+      // the top rewinds the intro.
+      if (mediaFullyExpanded) {
+        if (deltaY < -20 && window.scrollY <= 2) {
+          setMediaFullyExpanded(false);
+          e.preventDefault();
+        }
+        return;
+      }
       e.preventDefault();
       advance(deltaY * (deltaY < 0 ? 0.008 : 0.005));
       touchStartY.current = touchY;
@@ -186,10 +235,29 @@ const ScrollExpandMedia = ({
       window.removeEventListener("touchend", handleTouchEnd);
       window.removeEventListener("keydown", handleKey);
     };
-  }, [scrollProgress, mediaFullyExpanded, reducedMotion, expandNow]);
+  }, [mediaFullyExpanded, reducedMotion, expandNow]);
 
-  const mediaWidth = 300 + scrollProgress * (isMobileState ? 650 : 1250);
-  const mediaHeight = 400 + scrollProgress * (isMobileState ? 200 : 400);
+  // The card holds a 16:9 aspect at every stage of the expansion, rather
+  // than morphing from portrait to landscape as the original did. The media
+  // is a wide campus map: a portrait card would `object-cover` it down to a
+  // narrow slice, hiding most of the campus during the part of the
+  // animation the visitor actually watches.
+  //
+  // The ceiling is computed from both viewport axes rather than left to CSS
+  // `max-width`/`max-height`. Those clamp one dimension independently, which
+  // silently breaks the ratio — measured at 1.659 instead of 1.778 on a
+  // short window, i.e. the map cropped after all. Capping the width by
+  // whichever axis binds first keeps 16:9 exact at every size.
+  const MEDIA_RATIO = 16 / 9;
+  const widthCeiling = Math.min(
+    viewport.w * 0.95,
+    viewport.h * 0.85 * MEDIA_RATIO,
+  );
+  const mediaWidth = Math.min(
+    340 + scrollProgress * (isMobileState ? 620 : 1400),
+    widthCeiling,
+  );
+  const mediaHeight = mediaWidth / MEDIA_RATIO;
   const textTranslateX = scrollProgress * (isMobileState ? 180 : 150);
 
   const firstWord = title ? title.split(" ")[0] : "";
@@ -229,8 +297,10 @@ const ScrollExpandMedia = ({
                 style={{
                   width: `${mediaWidth}px`,
                   height: `${mediaHeight}px`,
-                  maxWidth: "95vw",
-                  maxHeight: "85vh",
+                  // No maxWidth/maxHeight here on purpose: the ceiling is
+                  // already applied to `mediaWidth` against both axes, and a
+                  // CSS clamp on one dimension alone would reintroduce the
+                  // ratio break it exists to prevent.
                   boxShadow: "0px 0px 50px rgba(0, 0, 0, 0.3)",
                 }}
               >
@@ -257,11 +327,16 @@ const ScrollExpandMedia = ({
                   </div>
                 ) : (
                   <div className="relative h-full w-full">
+                    {/* Intrinsic size matches the 16:9 source, and the card
+                        holds the same ratio, so `object-cover` has nothing
+                        to crop — the whole campus stays visible throughout
+                        the expansion. */}
                     <Image
                       src={mediaSrc}
                       alt={title || "Media content"}
-                      width={1536}
-                      height={1024}
+                      width={1672}
+                      height={941}
+                      sizes="(max-width: 768px) 95vw, 1600px"
                       className="h-full w-full rounded-xl bg-surface object-cover"
                       priority
                     />
