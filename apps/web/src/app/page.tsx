@@ -3,7 +3,7 @@ import path from "node:path";
 import Link from "next/link";
 import ScrollExpandMedia from "@/components/ui/scroll-expansion-hero";
 import { FeatureShowcase } from "@/components/FeatureShowcase";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { SiteHeader } from "@/components/SiteHeader";
 
 /**
  * Landing page.
@@ -52,9 +52,7 @@ export default function Home() {
   return (
     <main className="relative">
       {/* Floating, so it stays reachable during the scroll-locked hero. */}
-      <div className="fixed right-4 top-4 z-50">
-        <ThemeToggle />
-      </div>
+      <SiteHeader />
 
       <ScrollExpandMedia
         mediaType="image"

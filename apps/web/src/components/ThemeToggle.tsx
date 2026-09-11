@@ -74,7 +74,18 @@ const OPTIONS: { value: Theme; label: string; icon: React.ReactNode }[] = [
   },
 ];
 
-export function ThemeToggle({ className = "" }: { className?: string }) {
+/**
+ * `standalone` carries its own pill (the dashboard header, where it floats on
+ * its own). `inline` drops the border and background so it can sit inside a
+ * larger grouped bar without drawing a pill inside a pill.
+ */
+export function ThemeToggle({
+  className = "",
+  variant = "standalone",
+}: {
+  className?: string;
+  variant?: "standalone" | "inline";
+}) {
   const [theme, setTheme] = useState<Theme>("system");
   const [mounted, setMounted] = useState(false);
 
@@ -97,7 +108,11 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
     <div
       role="radiogroup"
       aria-label="Colour theme"
-      className={`inline-flex items-center gap-0.5 rounded-full border border-ink/15 bg-surface/70 p-0.5 backdrop-blur ${className}`}
+      className={`inline-flex items-center gap-0.5 rounded-full ${
+        variant === "standalone"
+          ? "border border-ink/15 bg-surface/70 p-0.5 backdrop-blur"
+          : ""
+      } ${className}`}
     >
       {OPTIONS.map((option) => {
         // Before mount every button renders unselected, so the server and

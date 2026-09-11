@@ -175,18 +175,34 @@ export function LocationHeatmap({
         </div>
       )}
 
-      {hoveredState && (
-        <div className="mt-3 rounded-lg border border-ink/10 bg-ink/[0.02] px-3 py-2">
-          <p className="text-sm font-medium text-ink">
-            {hoveredState.name}
-            <span className="ml-2 font-mono text-xs font-normal text-ink/50">
-              {hoveredState.openCount} open · peak priority{" "}
-              {hoveredState.maxPriority.toFixed(2)}
-            </span>
-          </p>
-          {hoveredState.topSummary && (
-            <p className="mt-0.5 truncate text-xs text-ink/60">
-              {categoryLabel(hoveredState.topCategory)} — {hoveredState.topSummary}
+      {/* Always present, fixed height, even with nothing hovered.
+          Showing this panel only on hover changed the height of the section
+          by ~55px every time the pointer crossed a marker. When the page is
+          scrolled near the bottom that shift moves the map itself, which
+          slides the marker out from under the cursor — mouseleave, panel
+          gone, layout shifts back, marker returns under the cursor,
+          mouseenter — and the whole section strobes. Reserving the space is
+          what stops the loop. */}
+      {active.length > 0 && (
+        <div className="mt-3 min-h-[3.5rem] rounded-lg border border-ink/10 bg-ink/[0.02] px-3 py-2">
+          {hoveredState ? (
+            <>
+              <p className="text-sm font-medium text-ink">
+                {hoveredState.name}
+                <span className="ml-2 font-mono text-xs font-normal text-ink/60">
+                  {hoveredState.openCount} open · peak priority{" "}
+                  {hoveredState.maxPriority.toFixed(2)}
+                </span>
+              </p>
+              {hoveredState.topSummary && (
+                <p className="mt-0.5 truncate text-xs text-ink/70">
+                  {categoryLabel(hoveredState.topCategory)} — {hoveredState.topSummary}
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-xs text-ink/60">
+              Point at a marker — or tab to one — for what is open there.
             </p>
           )}
         </div>

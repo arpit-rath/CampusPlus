@@ -13,7 +13,7 @@
  * is on screen is always what the database said.
  */
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   api,
@@ -25,6 +25,7 @@ import {
 } from "@/lib/api";
 import { categoryLabel, CATEGORY_SLUGS } from "@/lib/campus";
 import { PriorityBar } from "@/components/PriorityBar";
+import { canHover, ComplaintPreview, type HoverOrigin } from "./ComplaintPreview";
 
 const STATUS_STYLES: Record<ComplaintStatus, { label: string; className: string }> = {
   open: { label: "Open", className: "bg-critical/10 text-critical" },
@@ -54,6 +55,15 @@ export function ComplaintTable({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // The hover preview is pointer-only. Resolved after mount rather than
+  // during render so the server and client markup agree.
+  const [hoverable, setHoverable] = useState(false);
+  const [hovered, setHovered] = useState<{
+    complaint: Complaint;
+    origin: HoverOrigin;
+  } | null>(null);
+  useEffect(() => setHoverable(canHover()), []);
 
   const act = async (id: string, run: () => Promise<unknown>, message: string) => {
     setBusyId(id);
@@ -136,7 +146,12 @@ export function ComplaintTable({
               return (
                 <Fragment key={complaint.id}>
                   <tr
-                    onClick={() => setExpandedId(expanded ? null : complaint.id)}
+                    onClick={() => {
+                      // The expanded row shows everything the card does, so
+                      // leaving the card up would just cover it.
+                      setHovered(null);
+                      setExpandedId(expanded ? null : complaint.id);
+                    }}
                     className={`cursor-pointer border-b border-ink/5 transition-colors hover:bg-ink/[0.03] ${
                       expanded ? "bg-ink/[0.03]" : ""
                     } ${complaint.safety_flag ? "border-l-2 border-l-hazard" : ""}`}
@@ -149,8 +164,22 @@ export function ComplaintTable({
                       </span>
                     </td>
                     <td className="px-4 py-3">
+                      {/* The hover target. Scoped to the title block rather
+                          than the whole row so moving down the Location or
+                          Priority columns does not drag a card along. */}
+                      <div
+                        className="group/title inline-block max-w-xs"
+                        onMouseEnter={(e) =>
+                          hoverable &&
+                          setHovered({
+                            complaint,
+                            origin: { x: e.clientX, y: e.clientY },
+                          })
+                        }
+                        onMouseLeave={() => setHovered(null)}
+                      >
                       <div className="flex items-center gap-1.5">
-                        <span className="font-medium text-ink">
+                        <span className="font-medium text-ink decoration-signal-ink/50 underline-offset-4 group-hover/title:underline">
                           {categoryLabel(complaint.category_slug)}
                         </span>
                         {complaint.safety_flag && (
@@ -169,6 +198,7 @@ export function ComplaintTable({
                       </div>
                       <div className="max-w-xs truncate text-xs text-ink/50">
                         {complaint.ai_summary ?? complaint.raw_description}
+                      </div>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-ink/70">
@@ -371,6 +401,11 @@ export function ComplaintTable({
           </tbody>
         </table>
       </div>
+
+      <ComplaintPreview
+        complaint={hovered?.complaint ?? null}
+        origin={hovered?.origin ?? null}
+      />
     </>
   );
 }
