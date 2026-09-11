@@ -152,7 +152,7 @@ const CAPABILITIES: Capability[] = [
       <Panel className="bg-gradient-to-br from-hazard/20 via-hazard/10 to-transparent">
         <div className="relative">
           <div className="flex h-28 w-36 items-center justify-center rounded-lg border-2 border-ink/20 bg-surface">
-            <svg viewBox="0 0 24 24" className="h-10 w-10 text-ink/30" fill="currentColor">
+            <svg viewBox="0 0 24 24" className="h-10 w-10 text-muted" fill="currentColor">
               <path d="M4 5h16v14H4z" opacity="0.25" />
               <path d="M6 17l4.5-5.5 3 3.5L16 12l3 5z" />
               <circle cx="8.5" cy="8.5" r="1.8" />

@@ -53,12 +53,12 @@ export function SuggestedMerges({
           <h2 className="text-sm font-semibold uppercase tracking-wide text-ink">
             Possible duplicates · needs review
           </h2>
-          <p className="mt-0.5 text-xs text-ink/55">
+          <p className="mt-0.5 text-xs text-muted">
             Similar enough to flag, not similar enough to merge automatically.
             Your call.
           </p>
         </div>
-        <span className="shrink-0 font-mono text-lg font-bold tabular-nums text-signal">
+        <span className="shrink-0 font-mono text-lg font-bold tabular-nums text-signal-ink">
           {merges.length}
         </span>
       </div>
@@ -75,13 +75,13 @@ export function SuggestedMerges({
           return (
             <li
               key={merge.complaint.id}
-              className="rounded-lg border border-ink/10 bg-surface p-3"
+              className="rounded-lg border border-ink/10 bg-surface p-3 transition-shadow duration-200 hover:shadow-card"
             >
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-signal/15 px-2 py-0.5 font-mono text-[11px] font-semibold text-signal">
+                <span className="rounded-full bg-signal/15 px-2 py-0.5 font-mono text-[11px] font-semibold text-signal-ink">
                   {(merge.similarity * 100).toFixed(0)}% similar
                 </span>
-                <span className="text-xs text-ink/50">
+                <span className="text-xs text-muted">
                   {categoryLabel(merge.complaint.category_slug)} ·{" "}
                   {merge.complaint.location_building ?? "unspecified"}
                 </span>
@@ -106,14 +106,14 @@ export function SuggestedMerges({
                 <button
                   onClick={() => decide(merge, true)}
                   disabled={busy}
-                  className="rounded-md bg-ink px-3 py-1.5 text-xs font-medium text-paper disabled:opacity-40"
+                  className="btn btn-sm bg-ink text-paper hover:brightness-110"
                 >
                   {busy ? "Working…" : "Same problem — merge"}
                 </button>
                 <button
                   onClick={() => decide(merge, false)}
                   disabled={busy}
-                  className="rounded-md border border-ink/20 px-3 py-1.5 text-xs font-medium text-ink hover:bg-ink/5 disabled:opacity-40"
+                  className="btn btn-secondary btn-sm"
                 >
                   Different — keep separate
                 </button>
@@ -139,14 +139,14 @@ function MergeSide({
 }) {
   return (
     <div className="rounded-md border border-ink/10 bg-ink/[0.02] p-2">
-      <p className="flex items-center justify-between gap-2 text-[10px] uppercase tracking-wide text-ink/40">
+      <p className="flex items-center justify-between gap-2 text-[10px] uppercase tracking-wide text-muted">
         {heading}
         <Link href={`/track/${id}`} className="font-mono normal-case hover:text-ink">
           #{id.slice(0, 8)}
         </Link>
       </p>
       <p className="mt-1 line-clamp-3 text-xs text-ink/75">{text}</p>
-      <p className="mt-1 font-mono text-[10px] text-ink/35">
+      <p className="mt-1 font-mono text-[10px] text-muted">
         {student ?? "anonymous"}
       </p>
     </div>

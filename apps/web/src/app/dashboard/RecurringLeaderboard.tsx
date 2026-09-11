@@ -43,7 +43,7 @@ export function RecurringLeaderboard({
           <h2 className="text-sm font-semibold uppercase tracking-wide text-ink">
             Recurring issues
           </h2>
-          <p className="mt-0.5 text-xs text-ink/50">
+          <p className="mt-0.5 text-xs text-muted">
             Clusters built by embedding similarity, ranked by how many
             independent students are affected
           </p>
@@ -59,7 +59,7 @@ export function RecurringLeaderboard({
       ) : ranked.length === 0 ? (
         <div className="mt-4 rounded-lg border border-dashed border-ink/15 bg-ink/[0.02] px-4 py-8 text-center">
           <p className="text-sm font-medium text-ink/70">No clusters yet</p>
-          <p className="mx-auto mt-1 max-w-xs text-xs text-ink/45">
+          <p className="mx-auto mt-1 max-w-xs text-xs text-muted">
             When two students report the same problem in the same building,
             they merge into one case here. Three independent students makes it
             a recurring issue.
@@ -75,13 +75,13 @@ export function RecurringLeaderboard({
                     ? `/track/${cluster.representative_complaint_id}`
                     : "/dashboard"
                 }
-                className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors hover:bg-ink/[0.04] ${
+                className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors duration-200 hover:bg-ink/[0.04] ${
                   cluster.is_recurring
                     ? "border-critical/30 bg-critical/5"
                     : "border-ink/10"
                 }`}
               >
-                <span className="w-4 shrink-0 text-center font-mono text-xs text-ink/35">
+                <span className="w-4 shrink-0 text-center font-mono text-xs text-muted">
                   {index + 1}
                 </span>
 
@@ -96,17 +96,17 @@ export function RecurringLeaderboard({
                       </span>
                     )}
                     {cluster.safety_flag && (
-                      <span className="shrink-0 rounded-full bg-hazard/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-hazard">
+                      <span className="shrink-0 rounded-full bg-hazard/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-hazard">
                         Safety
                       </span>
                     )}
                   </span>
-                  <span className="block truncate text-xs text-ink/55">
+                  <span className="block truncate text-xs text-muted">
                     {cluster.representative_summary ??
                       cluster.location_building ??
                       "Unspecified location"}
                   </span>
-                  <span className="block truncate text-[11px] text-ink/35">
+                  <span className="block truncate text-[11px] text-muted">
                     {cluster.location_building ?? "Unspecified building"} · last report{" "}
                     {new Date(cluster.last_seen).toLocaleTimeString()}
                   </span>
@@ -120,11 +120,11 @@ export function RecurringLeaderboard({
                   >
                     {cluster.independent_student_count}
                   </span>
-                  <span className="block text-[9px] uppercase tracking-wide text-ink/40">
+                  <span className="block text-[9px] uppercase tracking-wide text-muted">
                     students
                   </span>
                   {cluster.member_count !== cluster.independent_student_count && (
-                    <span className="block font-mono text-[10px] text-ink/30">
+                    <span className="block font-mono text-[10px] text-muted">
                       {cluster.member_count} reports
                     </span>
                   )}

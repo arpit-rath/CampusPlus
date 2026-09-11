@@ -77,7 +77,7 @@ export default function Home() {
             <h2 className="mt-4 text-balance text-3xl font-bold leading-tight tracking-tight sm:text-4xl">
               The intelligence layer, not the form, is the product.
             </h2>
-            <p className="mt-5 text-base leading-relaxed text-ink/75 sm:text-lg">
+            <p className="mt-5 text-base leading-relaxed text-muted sm:text-lg">
               Students report campus problems — a leaking ceiling, a dead
               router, sparking wiring in a basement. Most systems file each one
               as its own ticket and leave a human to notice they are the same
@@ -85,7 +85,7 @@ export default function Home() {
               turns it into a vector, and compares it against everything
               recently reported in the same building.
             </p>
-            <p className="mt-4 text-base leading-relaxed text-ink/75 sm:text-lg">
+            <p className="mt-4 text-base leading-relaxed text-muted sm:text-lg">
               Duplicates merge. Problems that keep coming back get flagged.
               Everything lands in one queue ranked by a score that shows its
               own arithmetic — so the facilities team can see not just what is
@@ -103,7 +103,7 @@ export default function Home() {
                   <dt className="font-mono text-2xl font-bold tabular-nums text-ink sm:text-3xl">
                     {stat.value}
                   </dt>
-                  <dd className="mt-1 text-xs leading-snug text-ink/70">
+                  <dd className="mt-1 text-xs leading-snug text-muted">
                     {stat.label}
                   </dd>
                 </div>
@@ -127,7 +127,7 @@ export default function Home() {
             >
               Ready when you are.
             </h2>
-            <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-ink/75">
+            <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-muted">
               Report something that needs fixing, or open the command center to
               see what the campus is dealing with right now.
             </p>
@@ -135,26 +135,26 @@ export default function Home() {
             <div className="mt-9 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
               <Link
                 href="/report"
-                className="inline-flex h-12 items-center justify-center rounded-full bg-signal-fill px-8 font-medium text-on-signal shadow-card transition-transform hover:scale-[1.03] active:scale-[0.99]"
+                className="btn btn-primary h-12 rounded-full px-8 text-base"
               >
                 Report a problem
               </Link>
               <Link
                 href="/dashboard"
-                className="inline-flex h-12 items-center justify-center rounded-full border border-ink/25 bg-surface/70 px-8 font-medium text-ink backdrop-blur transition-transform hover:scale-[1.03] active:scale-[0.99]"
+                className="btn btn-secondary h-12 rounded-full px-8 text-base backdrop-blur"
               >
                 Log in as admin
               </Link>
             </div>
 
-            <p className="mt-6 text-xs text-ink/70">
+            <p className="mt-6 text-xs text-muted">
               Students do not need an account. Admin actions are gated by a
               token when one is configured.
             </p>
           </section>
 
           <footer className="mt-16 border-t border-ink/10 pt-6 text-center">
-            <p className="text-xs text-ink/70">
+            <p className="text-xs text-muted">
               CampusPlus — campus problem intelligence.
             </p>
           </footer>

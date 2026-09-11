@@ -81,7 +81,7 @@ export function DigestPanel({ onChaos }: { onChaos: (message: string) => void })
           aria-expanded={open}
         >
           <span
-            className={`text-ink/40 transition-transform ${open ? "rotate-90" : ""}`}
+            className={`text-muted transition-transform ${open ? "rotate-90" : ""}`}
             aria-hidden
           >
             ▸
@@ -90,7 +90,7 @@ export function DigestPanel({ onChaos }: { onChaos: (message: string) => void })
             <span className="block text-sm font-semibold uppercase tracking-wide text-ink">
               Operations digest
             </span>
-            <span className="block text-xs text-ink/50">
+            <span className="block text-xs text-muted">
               Aggregated from real complaint rows — no model involved
             </span>
           </span>
@@ -106,7 +106,7 @@ export function DigestPanel({ onChaos }: { onChaos: (message: string) => void })
                   className={`px-2.5 py-1 text-xs font-medium transition-colors first:rounded-l-md last:rounded-r-md ${
                     windowDays === w.days
                       ? "bg-ink text-paper"
-                      : "text-ink/60 hover:bg-ink/5"
+                      : "text-muted hover:bg-ink/5"
                   }`}
                 >
                   {w.label}
@@ -118,7 +118,7 @@ export function DigestPanel({ onChaos }: { onChaos: (message: string) => void })
             onClick={fireChaos}
             disabled={chaosBusy}
             title="Submit a burst of synthetic complaints through the real pipeline — a demo device, not a shortcut: they are understood, embedded, matched and clustered exactly like a student's report."
-            className="rounded-md border border-signal/40 bg-signal/10 px-3 py-1.5 text-xs font-semibold text-signal transition-colors hover:bg-signal/20 disabled:opacity-40"
+            className="btn btn-sm border border-signal/40 bg-signal/10 font-semibold text-signal-ink hover:bg-signal/20"
           >
             {chaosBusy ? "Running…" : "⚡ Chaos burst"}
           </button>
@@ -153,13 +153,13 @@ export function DigestPanel({ onChaos }: { onChaos: (message: string) => void })
 
           {digest.headline_issues.length > 0 && (
             <div className="mt-4">
-              <p className="text-[11px] uppercase tracking-wide text-ink/40">
+              <p className="text-[11px] uppercase tracking-wide text-muted">
                 Headline issues
               </p>
               <ol className="mt-1.5 flex flex-col gap-1">
                 {digest.headline_issues.map((issue) => (
                   <li key={issue.id} className="flex items-baseline gap-2 text-xs">
-                    <span className="font-mono tabular-nums text-ink/50">
+                    <span className="font-mono tabular-nums text-muted">
                       {issue.priority_score.toFixed(2)}
                     </span>
                     <span className="truncate text-ink/75">
@@ -171,7 +171,7 @@ export function DigestPanel({ onChaos }: { onChaos: (message: string) => void })
             </div>
           )}
 
-          <p className="mt-4 font-mono text-[10px] text-ink/30">
+          <p className="mt-4 font-mono text-[10px] text-muted">
             Generated {new Date(digest.generated_at).toLocaleString()} · last{" "}
             {digest.window_days} day(s)
           </p>
@@ -184,7 +184,7 @@ export function DigestPanel({ onChaos }: { onChaos: (message: string) => void })
 function Metric({ label, value }: { label: string; value: number }) {
   return (
     <div>
-      <p className="text-[11px] uppercase tracking-wide text-ink/40">{label}</p>
+      <p className="text-[11px] uppercase tracking-wide text-muted">{label}</p>
       <p className="mt-0.5 font-mono text-xl font-bold tabular-nums text-ink">{value}</p>
     </div>
   );
@@ -200,9 +200,9 @@ function Ranking({
   const max = Math.max(1, ...rows.map((r) => Number(r.value) || 0));
   return (
     <div>
-      <p className="text-[11px] uppercase tracking-wide text-ink/40">{title}</p>
+      <p className="text-[11px] uppercase tracking-wide text-muted">{title}</p>
       {rows.length === 0 ? (
-        <p className="mt-1 text-xs text-ink/35">Nothing in this window.</p>
+        <p className="mt-1 text-xs text-muted">Nothing in this window.</p>
       ) : (
         <ul className="mt-1.5 flex flex-col gap-1">
           {rows.map((row) => (
@@ -214,7 +214,7 @@ function Ranking({
                   style={{ width: `${((Number(row.value) || 0) / max) * 100}%` }}
                 />
               </span>
-              <span className="w-6 shrink-0 text-right font-mono tabular-nums text-ink/50">
+              <span className="w-6 shrink-0 text-right font-mono tabular-nums text-muted">
                 {row.value}
               </span>
             </li>

@@ -57,7 +57,7 @@ export function AskCampusPlus({ complaints }: { complaints: Complaint[] }) {
       <h2 className="text-sm font-semibold uppercase tracking-wide text-ink">
         Ask CampusPlus
       </h2>
-      <p className="mt-0.5 text-xs text-ink/50">
+      <p className="mt-0.5 text-xs text-muted">
         Answered only from real complaint records — never from a model&rsquo;s
         memory, and never by letting it write a query.
       </p>
@@ -75,12 +75,12 @@ export function AskCampusPlus({ complaints }: { complaints: Complaint[] }) {
           maxLength={500}
           disabled={asking}
           placeholder="Ask about the campus…"
-          className="min-w-0 flex-1 rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm outline-none placeholder:text-ink/30 focus:border-signal disabled:opacity-60"
+          className="input min-w-0 flex-1"
         />
         <button
           type="submit"
           disabled={asking || !question.trim()}
-          className="shrink-0 rounded-lg bg-ink px-3 py-2 text-sm font-medium text-paper disabled:opacity-40"
+          className="btn shrink-0 bg-ink px-4 text-paper hover:brightness-110"
         >
           {asking ? "…" : "Ask"}
         </button>
@@ -95,7 +95,7 @@ export function AskCampusPlus({ complaints }: { complaints: Complaint[] }) {
                   setQuestion(example);
                   ask(example);
                 }}
-                className="w-full rounded-md border border-ink/10 px-2.5 py-1.5 text-left text-xs text-ink/60 transition-colors hover:border-ink/25 hover:text-ink"
+                className="w-full rounded-md border border-ink/10 px-2.5 py-1.5 text-left text-xs text-muted transition-colors hover:border-ink/25 hover:text-ink"
               >
                 {example}
               </button>
@@ -138,7 +138,7 @@ export function AskCampusPlus({ complaints }: { complaints: Complaint[] }) {
                     setQuestion(example);
                     ask(example);
                   }}
-                  className="w-full rounded-md border border-ink/10 px-2.5 py-1.5 text-left text-xs text-ink/60 transition-colors hover:border-ink/25 hover:text-ink"
+                  className="w-full rounded-md border border-ink/10 px-2.5 py-1.5 text-left text-xs text-muted transition-colors hover:border-ink/25 hover:text-ink"
                 >
                   {example}
                 </button>
@@ -152,14 +152,14 @@ export function AskCampusPlus({ complaints }: { complaints: Complaint[] }) {
         <div className="mt-3 flex min-h-0 flex-1 flex-col gap-2">
           <p className="text-sm leading-relaxed text-ink">{answer.answer}</p>
 
-          <p className="font-mono text-[10px] uppercase tracking-wide text-ink/35">
+          <p className="font-mono text-[10px] uppercase tracking-wide text-muted">
             Read as: {answer.filters} · {answer.matched_count} record
             {answer.matched_count === 1 ? "" : "s"} matched
           </p>
 
           {answer.cited_complaint_ids.length > 0 && (
             <div className="flex min-h-0 flex-col gap-1 overflow-y-auto">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-ink/45">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted">
                 Based on
               </p>
               {answer.cited_complaint_ids.slice(0, 6).map((id) => {
@@ -168,11 +168,11 @@ export function AskCampusPlus({ complaints }: { complaints: Complaint[] }) {
                   <Link
                     key={id}
                     href={`/track/${id}`}
-                    className="truncate rounded border border-ink/10 px-2 py-1 font-mono text-[11px] text-ink/60 hover:border-ink/25 hover:text-ink"
+                    className="truncate rounded border border-ink/10 px-2 py-1 font-mono text-[11px] text-muted hover:border-ink/25 hover:text-ink"
                   >
                     #{id.slice(0, 8)}
                     {complaint && (
-                      <span className="ml-1.5 font-sans text-ink/45">
+                      <span className="ml-1.5 font-sans text-muted">
                         {complaint.ai_summary ?? complaint.raw_description}
                       </span>
                     )}

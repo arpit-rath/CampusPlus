@@ -26,11 +26,13 @@ import {
 } from "@/lib/api";
 import { categoryLabel } from "@/lib/campus";
 import { PriorityBar } from "@/components/PriorityBar";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { BrandMark } from "@/components/icons";
 import { LiveIndicator, type ConnectionStatus } from "@/components/LiveIndicator";
 
 const STATUS_STYLES: Record<ComplaintStatus, { label: string; className: string }> = {
   open: { label: "Open", className: "border-critical/30 bg-critical/10 text-critical" },
-  in_progress: { label: "In progress", className: "border-signal/30 bg-signal/10 text-signal" },
+  in_progress: { label: "In progress", className: "border-signal/30 bg-signal/10 text-signal-ink" },
   resolved: { label: "Resolved", className: "border-calm/30 bg-calm/10 text-calm" },
 };
 
@@ -125,11 +127,11 @@ export default function TrackComplaintPage() {
     <Shell>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="font-mono text-xs uppercase tracking-widest text-ink/50">
+          <p className="font-mono text-xs uppercase tracking-widest text-muted">
             Tracking #{complaint.id.slice(0, 8)}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-3">
-            <h1 className="text-3xl font-bold tracking-tight">
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
               {categoryLabel(complaint.category_slug)}
             </h1>
             <span
@@ -143,7 +145,7 @@ export default function TrackComplaintPage() {
       </div>
 
       {error && (
-        <p className="rounded-lg border border-signal/30 bg-signal/10 px-3 py-2 text-sm text-signal">
+        <p className="rounded-lg border border-signal/30 bg-signal/10 px-3 py-2 text-sm text-signal-ink">
           {error}
         </p>
       )}
@@ -162,12 +164,12 @@ export default function TrackComplaintPage() {
         </div>
       )}
 
-      <section className="rounded-xl border border-ink/10 bg-surface p-5">
-        <h2 className="font-mono text-xs uppercase tracking-widest text-ink/50">
+      <section className="panel p-5">
+        <h2 className="font-mono text-xs uppercase tracking-widest text-muted">
           AI summary
         </h2>
         <p className="mt-2 text-ink">{complaint.ai_summary ?? complaint.raw_description}</p>
-        <p className="mt-2 text-xs text-ink/50">
+        <p className="mt-2 text-xs text-muted">
           {categoryLabel(complaint.category_slug)}
           {complaint.department_name ? ` · ${complaint.department_name}` : ""}
           {complaint.location_building ? ` · ${complaint.location_building}` : ""}
@@ -181,11 +183,11 @@ export default function TrackComplaintPage() {
         }`}
       >
         <div className="flex items-center justify-between">
-          <h2 className="font-mono text-xs uppercase tracking-widest text-ink/50">
+          <h2 className="font-mono text-xs uppercase tracking-widest text-muted">
             Why this priority
           </h2>
           {justUpdated && (
-            <span className="font-mono text-[10px] uppercase tracking-widest text-signal">
+            <span className="font-mono text-[10px] uppercase tracking-widest text-signal-ink">
               Just updated
             </span>
           )}
@@ -202,7 +204,7 @@ export default function TrackComplaintPage() {
       {photo && (
         <section className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
-            <h2 className="font-mono text-xs uppercase tracking-widest text-ink/50">
+            <h2 className="font-mono text-xs uppercase tracking-widest text-muted">
               Photo
             </h2>
             {complaint.photo_matches_text !== null && (
@@ -210,7 +212,7 @@ export default function TrackComplaintPage() {
                 className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
                   complaint.photo_matches_text
                     ? "bg-calm/10 text-calm"
-                    : "bg-signal/10 text-signal"
+                    : "bg-signal/10 text-signal-ink"
                 }`}
               >
                 {complaint.photo_matches_text ? "Verified against description" : "Unverified"}
@@ -227,7 +229,7 @@ export default function TrackComplaintPage() {
       )}
 
       <section>
-        <h2 className="font-mono text-xs uppercase tracking-widest text-ink/50">
+        <h2 className="font-mono text-xs uppercase tracking-widest text-muted">
           Timeline
         </h2>
         <ol className="mt-3 flex flex-col gap-3 border-l border-ink/15 pl-4">
@@ -237,24 +239,33 @@ export default function TrackComplaintPage() {
               <p className="text-sm font-medium text-ink">
                 {STATUS_STYLES[event.status]?.label ?? event.status}
               </p>
-              {event.note && <p className="text-sm text-ink/60">{event.note}</p>}
-              <p className="font-mono text-[11px] text-ink/35">
+              {event.note && <p className="text-sm text-muted">{event.note}</p>}
+              <p className="font-mono text-[11px] text-muted">
                 {new Date(event.created_at).toLocaleString()}
                 {event.actor ? ` · ${event.actor}` : ""}
               </p>
             </li>
           ))}
           {events.length === 0 && (
-            <li className="text-sm text-ink/40">No status changes yet.</li>
+            <li className="text-sm text-muted">No status changes yet.</li>
           )}
         </ol>
       </section>
 
       <section>
-        <h2 className="font-mono text-xs uppercase tracking-widest text-ink/50">
+        <h2 className="font-mono text-xs uppercase tracking-widest text-muted">
           Original report
         </h2>
-        <p className="mt-2 text-sm text-ink/70">{complaint.raw_description}</p>
+        <p className="mt-2 text-sm leading-relaxed text-ink/80">
+          {complaint.raw_description}
+        </p>
+        {complaint.reporter_name && (
+          <p className="mt-3 text-xs text-muted">
+            Filed by{" "}
+            <span className="font-medium text-ink">{complaint.reporter_name}</span>
+            {complaint.reporter_role ? ` (${complaint.reporter_role})` : ""}
+          </p>
+        )}
       </section>
     </Shell>
   );
@@ -262,13 +273,17 @@ export default function TrackComplaintPage() {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-6 py-12">
-      <Link
-        href="/"
-        className="font-mono text-xs uppercase tracking-widest text-ink/50 hover:text-ink"
-      >
-        CampusPlus
-      </Link>
+    <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-10">
+      <div className="flex items-center justify-between gap-3">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 text-muted transition-colors hover:text-ink"
+        >
+          <BrandMark className="h-[18px] w-[18px] text-signal-ink" />
+          <span className="font-mono text-xs uppercase tracking-widest">CampusPlus</span>
+        </Link>
+        <ThemeToggle />
+      </div>
       {children}
     </main>
   );

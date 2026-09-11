@@ -194,6 +194,8 @@ async def ingest_complaint(
     location_building: str,
     location_room: str | None = None,
     student_id: str | None = None,
+    reporter_name: str | None = None,
+    reporter_role: str | None = None,
     photo_url: str | None = None,
     image_bytes: bytes | None = None,
     provider: AIProvider | None = None,
@@ -213,6 +215,8 @@ async def ingest_complaint(
         # would make three anonymous students look like one, which is
         # exactly the count `is_recurring` depends on.
         student_id=(student_id.strip() or None) if student_id else None,
+        reporter_name=(reporter_name.strip() or None) if reporter_name else None,
+        reporter_role=reporter_role or None,
         raw_description=description,
         photo_url=photo_url,
         location_building=location_building,

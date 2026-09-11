@@ -52,7 +52,7 @@ const STATUS_LABEL: Record<ComplaintStatus, string> = {
 
 const STATUS_CLASS: Record<ComplaintStatus, string> = {
   open: "bg-critical/10 text-critical",
-  in_progress: "bg-signal/10 text-signal",
+  in_progress: "bg-signal/10 text-signal-ink",
   resolved: "bg-calm/10 text-calm",
 };
 
@@ -191,7 +191,7 @@ export function ComplaintPreview({
           >
             {STATUS_LABEL[complaint.status]}
           </span>
-          <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink/45">
+          <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted">
             No photo
           </span>
         </div>
@@ -202,21 +202,21 @@ export function ComplaintPreview({
           <p className="text-sm font-semibold text-ink">
             {categoryLabel(complaint.category_slug)}
           </p>
-          <p className="font-mono text-[10px] text-ink/50">#{complaint.id.slice(0, 8)}</p>
+          <p className="font-mono text-[10px] text-muted">#{complaint.id.slice(0, 8)}</p>
         </div>
 
         <p className="mt-1.5 line-clamp-3 text-xs leading-relaxed text-ink/75">{summary}</p>
 
         <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2">
           <div>
-            <dt className="text-[10px] uppercase tracking-wide text-ink/50">Where</dt>
+            <dt className="text-[10px] uppercase tracking-wide text-muted">Where</dt>
             <dd className="truncate text-xs text-ink/80">
               {complaint.location_building ?? "—"}
               {complaint.location_room ? ` · ${complaint.location_room}` : ""}
             </dd>
           </div>
           <div>
-            <dt className="text-[10px] uppercase tracking-wide text-ink/50">Severity</dt>
+            <dt className="text-[10px] uppercase tracking-wide text-muted">Severity</dt>
             <dd className="font-mono text-xs tabular-nums text-ink/80">
               {complaint.severity ?? "—"}/5
               {complaint.safety_flag && (
@@ -229,7 +229,7 @@ export function ComplaintPreview({
         </dl>
 
         <div className="mt-3">
-          <p className="text-[10px] uppercase tracking-wide text-ink/50">Priority</p>
+          <p className="text-[10px] uppercase tracking-wide text-muted">Priority</p>
           <div className="mt-1">
             <PriorityBar
               breakdown={complaint.priority_breakdown}
@@ -238,6 +238,14 @@ export function ComplaintPreview({
             />
           </div>
         </div>
+
+        {complaint.reporter_name && (
+          <p className="mt-2.5 truncate text-[11px] text-muted">
+            Reported by{" "}
+            <span className="font-medium text-ink">{complaint.reporter_name}</span>
+            {complaint.reporter_role ? ` (${complaint.reporter_role})` : ""}
+          </p>
+        )}
 
         {complaint.cluster_id && (
           <p className="mt-2.5 border-t border-ink/10 pt-2 text-[11px] text-ink/70">

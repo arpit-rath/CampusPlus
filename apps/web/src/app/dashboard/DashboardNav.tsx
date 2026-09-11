@@ -55,11 +55,15 @@ export function DashboardNav({
   active,
   onSelect,
   counts,
+  collapsed = false,
 }: {
   active: DashboardSection;
   onSelect: (section: DashboardSection) => void;
   /** Undefined means "nothing to say"; 0 renders as a muted zero. */
   counts: Partial<Record<DashboardSection, number>>;
+  /** Icon-only rail. Desktop only — the mobile layout is a scrolling row,
+   *  where there is no width to reclaim. */
+  collapsed?: boolean;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -107,27 +111,54 @@ export function DashboardNav({
             aria-selected={selected}
             aria-controls={`panel-${section.id}`}
             tabIndex={selected ? 0 : -1}
-            title={section.hint}
+            // Collapsed, the icon is all there is, so the accessible name has
+            // to come from somewhere — and the tooltip has to carry the label
+            // a sighted user can no longer read.
+            title={collapsed ? `${section.label} — ${section.hint}` : section.hint}
             onClick={() => onSelect(section.id)}
-            className={`group flex h-11 shrink-0 items-center gap-2.5 rounded-lg px-3 text-left text-sm transition-colors lg:w-full ${
+            className={`group relative flex h-11 shrink-0 items-center rounded-lg text-left text-sm transition-colors duration-200 lg:w-full ${
+              collapsed
+                ? "gap-2.5 px-3 lg:justify-center lg:gap-0 lg:px-0"
+                : "gap-2.5 px-3"
+            } ${
               selected
                 ? "bg-ink/[0.07] font-semibold text-ink"
-                : "font-medium text-ink/60 hover:bg-ink/[0.04] hover:text-ink"
+                : "font-medium text-muted hover:bg-ink/[0.04] hover:text-ink"
             }`}
           >
+            {/* The active marker has to survive the collapse: with the label
+                gone, a weight change alone is invisible. */}
+            {selected && (
+              <span
+                aria-hidden="true"
+                className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-signal-ink"
+              />
+            )}
             <span
               aria-hidden="true"
-              className={`h-[18px] w-[18px] shrink-0 ${
-                selected ? "text-signal-ink" : "text-ink/45 group-hover:text-ink/70"
-              }`}
+              className={`relative h-[18px] w-[18px] shrink-0 ${
+                collapsed ? "lg:mx-3" : ""
+              } ${selected ? "text-signal-ink" : "text-muted group-hover:text-ink"}`}
             >
               <section.Icon />
+              {/* Collapsed, a count cannot be a number in a row that no
+                  longer has one — it becomes a dot that says "something is
+                  waiting here". */}
+              {collapsed && count !== undefined && count > 0 && (
+                <span className="absolute -right-1.5 -top-1 hidden h-2 w-2 rounded-full bg-signal-ink ring-2 ring-paper lg:block" />
+              )}
             </span>
-            <span className="whitespace-nowrap">{section.label}</span>
-            {count !== undefined && (
+            <span
+              className={
+                collapsed ? "whitespace-nowrap lg:sr-only" : "whitespace-nowrap"
+              }
+            >
+              {section.label}
+            </span>
+            {!collapsed && count !== undefined && (
               <span
                 className={`ml-auto hidden rounded-full px-1.5 py-0.5 font-mono text-[10px] tabular-nums lg:inline-block ${
-                  count > 0 ? "bg-ink/10 text-ink/70" : "text-ink/35"
+                  count > 0 ? "bg-ink/10 text-ink" : "text-muted"
                 }`}
               >
                 {count}

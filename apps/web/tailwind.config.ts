@@ -21,6 +21,12 @@ export default {
         surface: "rgb(var(--surface) / <alpha-value>)",
         "surface-raised": "rgb(var(--surface-raised) / <alpha-value>)",
         ink: "rgb(var(--ink) / <alpha-value>)",
+        // Secondary text. A measured colour rather than `ink` at 40-50%
+        // opacity: that opacity was doing the work of a colour and failing
+        // at it — ink/50 on the light ground measures 3.32:1 and ink/40 on
+        // the dark surface 3.41:1, both under the 4.5:1 floor. This clears
+        // it in both themes with headroom (4.67:1 light, 5.92:1 dark).
+        muted: "rgb(var(--ink-muted) / <alpha-value>)",
 
         // Decorative fills, bars and borders only — fails 4.5:1 as text on a
         // light ground, which is what `signal-ink` is for.

@@ -80,7 +80,7 @@ export function PriorityBar({
         </span>
         <span
           className={`text-[10px] font-medium uppercase tracking-wide ${
-            filled >= 0.7 ? "text-critical" : filled >= 0.5 ? "text-signal" : "text-ink/45"
+            filled >= 0.7 ? "text-critical" : filled >= 0.5 ? "text-signal-ink" : "text-muted"
           }`}
         >
           {priorityLabel(score)}
@@ -125,10 +125,10 @@ export function PriorityBar({
                 <span className="font-mono tabular-nums text-ink/70">
                   {value.toFixed(3)}
                 </span>
-                <span className="font-mono text-[10px] tabular-nums text-ink/35">
+                <span className="font-mono text-[10px] tabular-nums text-muted">
                   {share}%
                 </span>
-                <span className="hidden flex-1 truncate text-ink/45 sm:block">
+                <span className="hidden flex-1 truncate text-muted sm:block">
                   {segment.explain}
                 </span>
               </div>

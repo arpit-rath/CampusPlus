@@ -167,3 +167,21 @@ export function BrandMark({ className = "h-full w-full" }: IconProps) {
     </svg>
   );
 }
+
+export function FlagIcon({ className = "h-full w-full" }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <path d="M4 21V4" />
+      <path d="M4 4.5h10.5l-1.5 4 1.5 4H4" />
+    </svg>
+  );
+}
+
+export function PanelIcon({ className = "h-full w-full" }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M9.5 4v16" />
+    </svg>
+  );
+}

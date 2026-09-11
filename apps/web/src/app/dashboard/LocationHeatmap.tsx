@@ -85,11 +85,11 @@ export function LocationHeatmap({
           <h2 className="text-sm font-semibold uppercase tracking-wide text-ink">
             Campus map
           </h2>
-          <p className="mt-0.5 text-xs text-ink/50">
+          <p className="mt-0.5 text-xs text-muted">
             Marker size scales with the highest open priority at each location
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3 text-[11px] text-ink/50">
+        <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted">
           <Legend className="bg-critical" label="Recurring" />
           <Legend className="bg-hazard" label="Safety flagged" />
           <Legend className="bg-signal" label="Open" />
@@ -97,7 +97,7 @@ export function LocationHeatmap({
       </div>
 
       {active.length === 0 ? (
-        <p className="mt-6 rounded-lg border border-dashed border-ink/15 bg-ink/[0.02] px-4 py-10 text-center text-sm text-ink/45">
+        <p className="mt-6 rounded-lg border border-dashed border-ink/15 bg-ink/[0.02] px-4 py-10 text-center text-sm text-muted">
           No open complaints anywhere on campus.
         </p>
       ) : (
@@ -113,7 +113,7 @@ export function LocationHeatmap({
             return (
               <span
                 key={building.name}
-                className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap text-[9px] text-ink/25"
+                className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap text-[9px] text-muted"
                 style={{ left: `${building.x}%`, top: `${building.y}%` }}
               >
                 {building.name}
@@ -189,7 +189,7 @@ export function LocationHeatmap({
             <>
               <p className="text-sm font-medium text-ink">
                 {hoveredState.name}
-                <span className="ml-2 font-mono text-xs font-normal text-ink/60">
+                <span className="ml-2 font-mono text-xs font-normal text-muted">
                   {hoveredState.openCount} open · peak priority{" "}
                   {hoveredState.maxPriority.toFixed(2)}
                 </span>
@@ -201,7 +201,7 @@ export function LocationHeatmap({
               )}
             </>
           ) : (
-            <p className="text-xs text-ink/60">
+            <p className="text-xs text-muted">
               Point at a marker — or tab to one — for what is open there.
             </p>
           )}

@@ -29,7 +29,7 @@ import { canHover, ComplaintPreview, type HoverOrigin } from "./ComplaintPreview
 
 const STATUS_STYLES: Record<ComplaintStatus, { label: string; className: string }> = {
   open: { label: "Open", className: "bg-critical/10 text-critical" },
-  in_progress: { label: "In progress", className: "bg-signal/10 text-signal" },
+  in_progress: { label: "In progress", className: "bg-signal/10 text-signal-ink" },
   resolved: { label: "Resolved", className: "bg-calm/10 text-calm" },
 };
 
@@ -100,7 +100,7 @@ export function ComplaintTable({
         <p className="text-sm font-medium text-ink/70">
           {filtersActive ? "Nothing matches these filters" : "No complaints yet"}
         </p>
-        <p className="mx-auto mt-1 max-w-sm text-xs text-ink/45">
+        <p className="mx-auto mt-1 max-w-sm text-xs text-muted">
           {filtersActive ? (
             "Try clearing a filter."
           ) : (
@@ -129,7 +129,7 @@ export function ComplaintTable({
       <div className="overflow-x-auto">
         <table className="w-full min-w-[860px] text-left text-sm">
           <thead>
-            <tr className="border-b border-ink/10 text-[11px] uppercase tracking-wide text-ink/40">
+            <tr className="border-b border-ink/10 bg-ink/[0.02] text-[11px] font-medium uppercase tracking-wide text-muted">
               <th className="px-4 py-2 font-medium">Status</th>
               <th className="px-4 py-2 font-medium">Issue</th>
               <th className="px-4 py-2 font-medium">Location</th>
@@ -183,7 +183,7 @@ export function ComplaintTable({
                           {categoryLabel(complaint.category_slug)}
                         </span>
                         {complaint.safety_flag && (
-                          <span className="rounded bg-hazard/15 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wider text-hazard">
+                          <span className="rounded bg-hazard/10 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wider text-hazard">
                             Safety
                           </span>
                         )}
@@ -196,7 +196,7 @@ export function ComplaintTable({
                           </span>
                         )}
                       </div>
-                      <div className="max-w-xs truncate text-xs text-ink/50">
+                      <div className="max-w-xs truncate text-xs text-muted">
                         {complaint.ai_summary ?? complaint.raw_description}
                       </div>
                       </div>
@@ -204,14 +204,14 @@ export function ComplaintTable({
                     <td className="px-4 py-3 text-ink/70">
                       {complaint.location_building ?? "—"}
                       {complaint.location_room && (
-                        <span className="text-ink/40"> · {complaint.location_room}</span>
+                        <span className="text-muted"> · {complaint.location_room}</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-xs text-ink/70">
                       {complaint.department_name ?? "—"}
                       {complaint.department_overridden && (
                         <span
-                          className="ml-1 text-ink/35"
+                          className="ml-1 text-muted"
                           title="Manually re-routed by an admin"
                         >
                           (override)
@@ -231,7 +231,7 @@ export function ComplaintTable({
                           className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
                             complaint.is_recurring
                               ? "bg-critical/10 text-critical"
-                              : "bg-ink/5 text-ink/60"
+                              : "bg-ink/5 text-muted"
                           }`}
                           title={`${complaint.cluster_member_count} reports from ${complaint.independent_student_count} independent students`}
                         >
@@ -239,14 +239,14 @@ export function ComplaintTable({
                           {complaint.independent_student_count === 1 ? "" : "s"}
                         </span>
                       ) : complaint.suggested_match_complaint_id ? (
-                        <span className="rounded-full bg-signal/10 px-2 py-0.5 text-xs font-medium text-signal">
+                        <span className="rounded-full bg-signal/10 px-2 py-0.5 text-xs font-medium text-signal-ink">
                           review
                         </span>
                       ) : (
-                        <span className="text-ink/20">—</span>
+                        <span className="text-muted">—</span>
                       )}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-xs text-ink/50">
+                    <td className="whitespace-nowrap px-4 py-3 text-xs text-muted">
                       {new Date(complaint.created_at).toLocaleString()}
                     </td>
                   </tr>
@@ -256,16 +256,28 @@ export function ComplaintTable({
                       <td colSpan={7} className="px-4 py-4">
                         <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
                           <div className="lg:col-span-2">
-                            <p className="text-[11px] uppercase tracking-wide text-ink/40">
+                            <p className="text-[11px] uppercase tracking-wide text-muted">
                               Original report
                             </p>
                             <p className="mt-1 text-sm text-ink/80">
                               {complaint.raw_description}
                             </p>
-                            <p className="mt-1 font-mono text-[11px] text-ink/35">
+                            <p className="mt-1.5 font-mono text-[11px] text-muted">
                               #{complaint.id.slice(0, 8)} ·{" "}
-                              {complaint.student_id ?? "anonymous"} · severity{" "}
-                              {complaint.severity ?? "—"}/5
+                              {complaint.reporter_name ? (
+                                <span className="text-ink">
+                                  {complaint.reporter_name}
+                                  {complaint.reporter_role && (
+                                    <span className="text-muted">
+                                      {" "}
+                                      ({complaint.reporter_role})
+                                    </span>
+                                  )}
+                                </span>
+                              ) : (
+                                complaint.student_id ?? "anonymous"
+                              )}{" "}
+                              · severity {complaint.severity ?? "—"}/5
                             </p>
 
                             {complaint.photo_url && (
@@ -278,7 +290,7 @@ export function ComplaintTable({
                             )}
 
                             <div className="mt-4 max-w-md">
-                              <p className="text-[11px] uppercase tracking-wide text-ink/40">
+                              <p className="text-[11px] uppercase tracking-wide text-muted">
                                 Why this priority
                               </p>
                               <div className="mt-1.5">
@@ -293,7 +305,7 @@ export function ComplaintTable({
 
                           <div className="flex flex-col gap-4">
                             <div>
-                              <p className="text-[11px] uppercase tracking-wide text-ink/40">
+                              <p className="text-[11px] uppercase tracking-wide text-muted">
                                 Status
                               </p>
                               <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -308,7 +320,7 @@ export function ComplaintTable({
                                         `#${complaint.id.slice(0, 8)} marked ${STATUS_STYLES[next].label.toLowerCase()}.`,
                                       )
                                     }
-                                    className="rounded-md border border-ink/20 px-2.5 py-1 text-xs font-medium text-ink hover:bg-ink/5 disabled:opacity-40"
+                                    className="btn btn-secondary btn-sm"
                                   >
                                     Mark {STATUS_STYLES[next].label.toLowerCase()}
                                   </button>
@@ -317,7 +329,7 @@ export function ComplaintTable({
                             </div>
 
                             <div>
-                              <p className="text-[11px] uppercase tracking-wide text-ink/40">
+                              <p className="text-[11px] uppercase tracking-wide text-muted">
                                 Re-route
                               </p>
                               <select
@@ -333,7 +345,7 @@ export function ComplaintTable({
                                     `#${complaint.id.slice(0, 8)} re-routed.`,
                                   )
                                 }
-                                className="mt-1.5 w-full rounded-md border border-ink/15 bg-surface px-2 py-1.5 text-xs outline-none focus:border-signal disabled:opacity-40"
+                                className="input input-sm mt-1.5"
                               >
                                 <option value="">Unassigned</option>
                                 {departments.map((department) => (
@@ -356,7 +368,7 @@ export function ComplaintTable({
                                     `#${complaint.id.slice(0, 8)} re-categorized.`,
                                   )
                                 }
-                                className="mt-1.5 w-full rounded-md border border-ink/15 bg-surface px-2 py-1.5 text-xs outline-none focus:border-signal disabled:opacity-40"
+                                className="input input-sm mt-1.5"
                               >
                                 <option value="">Uncategorized</option>
                                 {CATEGORY_SLUGS.map((slug) => (
@@ -386,7 +398,7 @@ export function ComplaintTable({
 
                             <Link
                               href={`/track/${complaint.id}`}
-                              className="text-center text-xs text-ink/50 underline hover:text-ink"
+                              className="text-center text-xs text-muted underline underline-offset-2 transition-colors hover:text-ink"
                             >
                               Open the student-facing view
                             </Link>

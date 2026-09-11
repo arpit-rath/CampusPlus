@@ -7,9 +7,16 @@ the `<=>` cosine operator have no sqlite equivalent worth faking — a sqlite
 stand-in would test a different system than the one that ships.
 
 So rather than failing when no database is around, those tests skip with a
-message that says exactly how to get one. `RUN_DB_TESTS=1` turns the skip
-into a hard failure, which is what CI should set: on a machine that is
-supposed to have a database, a silent skip is worse than a red test.
+message that says exactly how to get one.
+
+`RUN_DB_TESTS=1` is the switch for both halves of that. It admits the tests
+that commit for real and truncate afterwards, and it turns a *missing*
+database from a skip into a hard failure — which is what CI should set: on
+a machine that is supposed to have a database, a silent skip is worse than
+a red test. Without it, a bare `pytest` runs only what cannot touch stored
+data. That is deliberate and was learned the hard way: the developer
+database here is also the demo database, and a plain test run that found a
+reachable Postgres used to empty it.
 
 **Event loop scoping.** `app.db.database` builds one module-level async
 engine, so its connection pool belongs to whichever loop first used it.
@@ -131,6 +138,14 @@ async def db(database_ready: bool) -> AsyncGenerator[AsyncSession, None]:
                 await outer.rollback()
 
 
+TRUNCATE_REASON = (
+    "These tests TRUNCATE complaints, clusters, embeddings and status "
+    "events in the database at DATABASE_URL. Set RUN_DB_TESTS=1 to run "
+    "them — and only against a database whose contents you are willing to "
+    "lose."
+)
+
+
 @pytest_asyncio.fixture(loop_scope="session")
 async def clean_db(database_ready: bool) -> AsyncGenerator[AsyncSession, None]:
     """A committed-for-real session that truncates complaint data afterwards.
@@ -140,9 +155,18 @@ async def clean_db(database_ready: bool) -> AsyncGenerator[AsyncSession, None]:
     rows to be visible to a fresh query planner. This fixture therefore
     commits normally and cleans up by truncating, leaving the seeded
     departments and categories (reference data from migration 0001) intact.
+
+    Destruction is opt-in. Every developer database on this project is also
+    the demo database, and a bare `pytest` finding a reachable Postgres used
+    to be enough to empty it — a plain test run silently deleted a seeded
+    demo. RUN_DB_TESTS=1 is now what admits these tests at all, rather than
+    only deciding whether a *missing* database is a skip or a failure, so
+    the destructive path cannot be reached by accident.
     """
     if not database_ready:
         pytest.skip(SKIP_REASON)
+    if not os.getenv("RUN_DB_TESTS"):
+        pytest.skip(TRUNCATE_REASON)
 
     async with async_session_factory() as session:
         await _truncate(session)

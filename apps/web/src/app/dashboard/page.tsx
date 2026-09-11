@@ -34,13 +34,11 @@ import {
   type Complaint,
   type ComplaintStatus,
   type Department,
-  type Health,
   type SuggestedMerge,
 } from "@/lib/api";
 import { categoryLabel, CATEGORY_SLUGS } from "@/lib/campus";
-import { LiveIndicator, type ConnectionStatus } from "@/components/LiveIndicator";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { BrandMark } from "@/components/icons";
+import { BrandMark, FlagIcon, PanelIcon } from "@/components/icons";
 import { DashboardNav, SECTIONS, type DashboardSection } from "./DashboardNav";
 import { RecurringLeaderboard } from "./RecurringLeaderboard";
 import { AskCampusPlus } from "./AskCampusPlus";
@@ -56,15 +54,15 @@ const BACKGROUND_REFRESH_MS = 30_000;
 
 const DEFAULT_PAGE_SIZE = 25;
 
+const SIDEBAR_KEY = "campusplus.dashboardSidebar";
+
 export default function DashboardPage() {
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [clusters, setClusters] = useState<Cluster[]>([]);
   const [merges, setMerges] = useState<SuggestedMerge[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [stats, setStats] = useState<AdminStats | null>(null);
-  const [health, setHealth] = useState<Health | null>(null);
 
-  const [connection, setConnection] = useState<ConnectionStatus>("connecting");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [needsToken, setNeedsToken] = useState(false);
@@ -75,6 +73,7 @@ export default function DashboardPage() {
   const [recurringOnly, setRecurringOnly] = useState(false);
 
   const [section, setSection] = useState<DashboardSection>("overview");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
@@ -132,8 +131,30 @@ export default function DashboardPage() {
 
   useEffect(() => {
     refresh();
-    api.health().then(setHealth).catch(() => setHealth(null));
   }, [refresh]);
+
+  // Restored after mount rather than during render: the server has no idea
+  // what this browser chose, and reading it during render would mean the
+  // first paint disagrees with the markup React streamed.
+  useEffect(() => {
+    try {
+      setSidebarOpen(window.localStorage.getItem(SIDEBAR_KEY) !== "collapsed");
+    } catch {
+      /* private browsing: the rail just starts open every time */
+    }
+  }, []);
+
+  const toggleSidebar = useCallback(() => {
+    setSidebarOpen((open) => {
+      const next = !open;
+      try {
+        window.localStorage.setItem(SIDEBAR_KEY, next ? "open" : "collapsed");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     return subscribeToRealtime(
@@ -156,7 +177,9 @@ export default function DashboardPage() {
         refresh();
       },
       (status) => {
-        setConnection(status);
+        // The indicator that used to render this is gone; the callback still
+        // matters because a reconnect means the socket may have missed
+        // events while it was down.
         if (status === "live") refresh();
       },
     );
@@ -216,7 +239,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-3">
             <Link
               href="/"
-              className="inline-flex items-center gap-2 text-ink/60 transition-colors hover:text-ink"
+              className="inline-flex items-center gap-2 text-muted transition-colors hover:text-ink"
               title="Back to the landing page"
             >
               <BrandMark className="h-[18px] w-[18px] text-signal-ink" />
@@ -226,37 +249,60 @@ export default function DashboardPage() {
             <h1 className="text-lg font-bold tracking-tight sm:text-xl">Command center</h1>
           </div>
 
-          <div className="flex items-center gap-3 sm:gap-4">
-            {health && (
-              <span
-                className="hidden font-mono text-[10px] uppercase tracking-widest text-ink/50 sm:inline"
-                title={
-                  health.llm_effective === "gemini"
-                    ? "Complaints are being analyzed by Gemini."
-                    : "Running on the deterministic mock provider — no model quota is being spent."
-                }
-              >
-                AI: {health.llm_effective}
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* The one action an operator takes from this screen that is not
+                triage: filing something they saw themselves. */}
+            <Link href="/report" className="btn btn-primary">
+              <span aria-hidden="true" className="h-4 w-4">
+                <FlagIcon />
               </span>
-            )}
-            <LiveIndicator status={connection} />
+              <span className="hidden sm:inline">Report a problem</span>
+              <span className="sm:hidden">Report</span>
+            </Link>
             <ThemeToggle />
           </div>
         </div>
       </header>
 
       <div className="flex flex-col gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:gap-6">
-        <aside className="lg:w-56 lg:shrink-0">
-          <div className="lg:sticky lg:top-[84px]">
-            <DashboardNav
-              active={section}
-              onSelect={selectSection}
-              counts={{
-                recurring: recurringCount,
-                review: merges.length,
-                queue: complaints.length,
-              }}
-            />
+        <aside
+          className={`lg:shrink-0 lg:transition-[width] lg:duration-200 lg:ease-out ${
+            sidebarOpen ? "lg:w-56" : "lg:w-[68px]"
+          }`}
+        >
+          <div className="flex flex-col gap-1 lg:sticky lg:top-[84px]">
+            {/* Desktop only: below lg the rail is a scrolling row of chips,
+                where there is no horizontal space to reclaim. */}
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              aria-expanded={sidebarOpen}
+              aria-controls="dashboard-rail"
+              title={sidebarOpen ? "Collapse the sidebar" : "Expand the sidebar"}
+              className={`btn btn-ghost hidden lg:inline-flex ${
+                sidebarOpen ? "justify-start" : "justify-center px-0"
+              }`}
+            >
+              <span aria-hidden="true" className="h-[18px] w-[18px] shrink-0">
+                <PanelIcon />
+              </span>
+              <span className={sidebarOpen ? "" : "sr-only"}>
+                {sidebarOpen ? "Collapse" : "Expand sidebar"}
+              </span>
+            </button>
+
+            <div id="dashboard-rail">
+              <DashboardNav
+                active={section}
+                onSelect={selectSection}
+                collapsed={!sidebarOpen}
+                counts={{
+                  recurring: recurringCount,
+                  review: merges.length,
+                  queue: complaints.length,
+                }}
+              />
+            </div>
           </div>
         </aside>
 
@@ -264,7 +310,7 @@ export default function DashboardPage() {
           {flash && (
             <div
               role="status"
-              className="animate-[fadeIn_150ms_ease-out] rounded-lg border border-signal/40 bg-signal/10 px-4 py-2.5 text-sm font-medium text-signal"
+              className="animate-[fadeIn_150ms_ease-out] rounded-lg border border-signal/40 bg-signal/10 px-4 py-2.5 text-sm font-medium text-signal-ink"
             >
               {flash}
             </div>
@@ -289,7 +335,7 @@ export default function DashboardPage() {
               <h2 className="text-base font-semibold tracking-tight text-ink">
                 {meta.label}
               </h2>
-              <p className="text-xs text-ink/60">{meta.hint}</p>
+              <p className="text-xs text-muted">{meta.hint}</p>
             </div>
 
             {section === "overview" && (
@@ -307,7 +353,7 @@ export default function DashboardPage() {
             {section === "recurring" && (
               <>
                 <RecurringLeaderboard clusters={clusters} loading={loading} />
-                <p className="text-xs text-ink/60">
+                <p className="text-xs text-muted">
                   A cluster becomes recurring at three <em>independent</em> students, not
                   three reports — one student filing the same problem three times is one
                   problem, not a pattern.
@@ -336,13 +382,13 @@ export default function DashboardPage() {
             {section === "digest" && <DigestPanel onChaos={announce} />}
 
             {section === "queue" && (
-              <section className="rounded-xl border border-ink/10 bg-surface">
+              <section className="panel overflow-hidden">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink/10 px-4 py-3">
                   <div>
                     <h3 className="text-sm font-semibold uppercase tracking-wide text-ink">
                       Complaint queue
                     </h3>
-                    <p className="mt-0.5 text-xs text-ink/60">
+                    <p className="mt-0.5 text-xs text-muted">
                       {complaints.length} complaint{complaints.length === 1 ? "" : "s"},
                       highest priority first
                     </p>
@@ -352,7 +398,7 @@ export default function DashboardPage() {
                     <select
                       value={statusFilter}
                       onChange={(e) => setStatusFilter(e.target.value as ComplaintStatus | "")}
-                      className="rounded-md border border-ink/15 bg-surface px-2 py-1.5 text-xs text-ink outline-none focus:border-signal"
+                      className="input input-sm w-auto"
                       aria-label="Filter by status"
                     >
                       <option value="">All statuses</option>
@@ -364,7 +410,7 @@ export default function DashboardPage() {
                     <select
                       value={categoryFilter}
                       onChange={(e) => setCategoryFilter(e.target.value)}
-                      className="rounded-md border border-ink/15 bg-surface px-2 py-1.5 text-xs text-ink outline-none focus:border-signal"
+                      className="input input-sm w-auto"
                       aria-label="Filter by category"
                     >
                       <option value="">All categories</option>
@@ -375,7 +421,7 @@ export default function DashboardPage() {
                       ))}
                     </select>
 
-                    <label className="flex cursor-pointer items-center gap-1.5 rounded-md border border-ink/15 px-2 py-1.5 text-xs text-ink">
+                    <label className="flex h-9 cursor-pointer items-center gap-1.5 rounded-md border border-ink/15 px-2.5 text-xs text-ink transition-colors hover:border-ink/30">
                       <input
                         type="checkbox"
                         checked={recurringOnly}
@@ -392,7 +438,7 @@ export default function DashboardPage() {
                           setCategoryFilter("");
                           setRecurringOnly(false);
                         }}
-                        className="rounded-md px-2 py-1.5 text-xs text-ink/60 hover:text-ink"
+                        className="rounded-md px-2 py-1.5 text-xs text-muted hover:text-ink"
                       >
                         Clear
                       </button>
@@ -433,7 +479,7 @@ function EmptyPanel({ title, body }: { title: string; body: string }) {
   return (
     <div className="rounded-xl border border-dashed border-ink/15 bg-surface px-6 py-12 text-center">
       <p className="text-sm font-medium text-ink/80">{title}</p>
-      <p className="mx-auto mt-1.5 max-w-md text-xs leading-relaxed text-ink/60">{body}</p>
+      <p className="mx-auto mt-1.5 max-w-md text-xs leading-relaxed text-muted">{body}</p>
     </div>
   );
 }
@@ -458,7 +504,7 @@ function StatsRow({
     {
       label: "In progress",
       value: stats?.in_progress ?? complaints.filter((c) => c.status === "in_progress").length,
-      accent: "text-signal",
+      accent: "text-signal-ink",
     },
     {
       label: "Resolved",
@@ -489,10 +535,10 @@ function StatsRow({
       {tiles.map((tile) => (
         <div
           key={tile.label}
-          className="rounded-xl border border-ink/10 bg-surface px-4 py-3"
+          className="panel px-4 py-3 transition-shadow duration-200 hover:shadow-card"
           title={tile.hint}
         >
-          <p className="text-[11px] uppercase tracking-wide text-ink/60">{tile.label}</p>
+          <p className="text-[11px] uppercase tracking-wide text-muted">{tile.label}</p>
           <p className={`mt-1 font-mono text-2xl font-bold tabular-nums ${tile.accent}`}>
             {loading ? "—" : tile.value}
           </p>
@@ -527,11 +573,11 @@ function AdminTokenPrompt({ onSaved }: { onSaved: () => void }) {
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder="X-Admin-Token"
-        className="rounded-md border border-ink/20 bg-surface px-3 py-1.5 font-mono text-sm outline-none focus:border-signal"
+        className="input w-auto font-mono"
       />
       <button
         type="submit"
-        className="rounded-md bg-signal-fill px-3 py-1.5 text-sm font-medium text-on-signal"
+        className="btn btn-primary"
       >
         Save
       </button>

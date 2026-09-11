@@ -94,12 +94,23 @@ class Complaint(Base):
         CheckConstraint(
             "severity IS NULL OR (severity BETWEEN 1 AND 5)", name="ck_complaints_severity_range"
         ),
+        CheckConstraint(
+            "reporter_role IS NULL OR reporter_role IN ('student', 'teacher')",
+            name="ck_complaints_reporter_role",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     student_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Who filed it, and in what capacity. Description, not identity:
+    # `student_id` above stays the key the recurring rule counts distinctly,
+    # so a renamed reporter can never change what "three independent
+    # students" means. Nullable because every complaint filed before the
+    # form asked for a name is still in the table.
+    reporter_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    reporter_role: Mapped[str | None] = mapped_column(String(16), nullable=True)
     raw_description: Mapped[str] = mapped_column(Text, nullable=False)
     # Text, not String(2048): a photo URL is short, but this column has
     # historically been handed raw base64 data URLs and silently

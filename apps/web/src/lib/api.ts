@@ -131,6 +131,10 @@ export interface PriorityBreakdown {
 export interface Complaint {
   id: string;
   student_id: string | null;
+  /** Who filed it, as captured by the report form. Null for every complaint
+   *  filed before the form asked. */
+  reporter_name: string | null;
+  reporter_role: string | null;
   raw_description: string;
   photo_url: string | null;
   /** null = no photo attached; true/false = the model's verdict on whether
@@ -258,6 +262,8 @@ export interface CreateComplaintInput {
   location_room?: string;
   photo_base64?: string;
   student_id?: string;
+  reporter_name?: string;
+  reporter_role?: "student" | "teacher";
 }
 
 export interface ComplaintListFilters {

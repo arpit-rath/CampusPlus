@@ -59,20 +59,19 @@ export function Pagination({
   const first = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const last = Math.min(page * pageSize, total);
 
-  const stepClass =
-    "inline-flex h-9 items-center rounded-md border border-ink/15 px-3 text-xs font-medium text-ink transition-colors hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40";
+  const stepClass = "btn btn-secondary btn-sm";
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-ink/10 px-4 py-3">
       <div className="flex items-center gap-2">
-        <label htmlFor="page-size" className="text-xs text-ink/60">
+        <label htmlFor="page-size" className="text-xs text-muted">
           Show
         </label>
         <select
           id="page-size"
           value={pageSize}
           onChange={(e) => onPageSize(Number(e.target.value))}
-          className="rounded-md border border-ink/15 bg-surface px-2 py-1.5 text-xs text-ink outline-none focus:border-signal"
+          className="input input-sm w-auto"
         >
           {PAGE_SIZES.map((size) => (
             <option key={size} value={size}>
@@ -80,13 +79,13 @@ export function Pagination({
             </option>
           ))}
         </select>
-        <p className="text-xs text-ink/60" aria-live="polite">
+        <p className="text-xs text-muted" aria-live="polite">
           {total === 0 ? "Nothing to show" : `${first}–${last} of ${total}`}
         </p>
       </div>
 
       {pageCount > 1 && (
-        <nav aria-label="Complaint queue pages" className="flex items-center gap-1">
+        <nav aria-label="Complaint queue pages" className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => onPage(page - 1)}
@@ -101,7 +100,7 @@ export function Pagination({
               <span
                 key={`gap-${i}`}
                 aria-hidden="true"
-                className="px-1 text-xs text-ink/40"
+                className="px-1 text-xs text-muted"
               >
                 …
               </span>
@@ -112,10 +111,10 @@ export function Pagination({
                 onClick={() => onPage(entry)}
                 aria-current={entry === page ? "page" : undefined}
                 aria-label={`Page ${entry}`}
-                className={`inline-flex h-9 min-w-9 items-center justify-center rounded-md px-2 font-mono text-xs tabular-nums transition-colors ${
+                className={`inline-flex h-9 min-w-[36px] cursor-pointer items-center justify-center rounded-md px-2 font-mono text-xs tabular-nums transition-colors duration-200 ${
                   entry === page
                     ? "bg-ink font-bold text-paper"
-                    : "text-ink/70 hover:bg-ink/5 hover:text-ink"
+                    : "text-ink/80 hover:bg-ink/5 hover:text-ink"
                 }`}
               >
                 {entry}

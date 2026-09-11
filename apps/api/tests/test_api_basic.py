@@ -112,6 +112,61 @@ async def test_create_complaint_returns_the_full_frontend_contract(client):
     )
 
 
+async def test_create_complaint_records_who_filed_it(client):
+    """The report form requires a name and a role; the API stores both.
+
+    They are description rather than identity — `student_id` is still what
+    the recurring rule counts — so they round-trip untouched and do not
+    affect clustering.
+    """
+    response = await client.post(
+        "/complaints",
+        json={
+            "description": "The projector in seminar room 2 cuts out every few minutes.",
+            "location_building": "Academic Block A",
+            "location_room": "Seminar room 2",
+            "student_id": "teacher:meera-singh",
+            "reporter_name": "Dr Meera Singh",
+            "reporter_role": "teacher",
+        },
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["reporter_name"] == "Dr Meera Singh"
+    assert body["reporter_role"] == "teacher"
+    assert body["student_id"] == "teacher:meera-singh"
+
+
+async def test_reporter_role_is_a_closed_set(client):
+    """Free text here would split one group across three spellings."""
+    response = await client.post(
+        "/complaints",
+        json={
+            "description": "The lift in Academic Block B has been stuck since morning.",
+            "location_building": "Academic Block B",
+            "reporter_name": "Someone",
+            "reporter_role": "principal",
+        },
+    )
+    assert response.status_code == 422
+
+
+async def test_a_complaint_can_still_be_filed_without_a_reporter(client):
+    """Every complaint seeded before the form asked has neither field, and
+    the seed script still posts without them."""
+    response = await client.post(
+        "/complaints",
+        json={
+            "description": "The water cooler on the second floor is leaking again.",
+            "location_building": "Main Library",
+        },
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["reporter_name"] is None
+    assert body["reporter_role"] is None
+
+
 async def test_create_complaint_rejects_empty_description(client):
     response = await client.post(
         "/complaints", json={"description": "", "location_building": "Innovation Hall"}

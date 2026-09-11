@@ -9,7 +9,7 @@
 export type ConnectionStatus = "connecting" | "live" | "offline";
 
 const STYLES: Record<ConnectionStatus, { label: string; dot: string; text: string }> = {
-  connecting: { label: "Connecting", dot: "bg-ink/40", text: "text-ink/45" },
+  connecting: { label: "Connecting", dot: "bg-ink/40", text: "text-muted" },
   live: { label: "Live", dot: "bg-calm animate-pulse", text: "text-calm" },
   offline: { label: "Reconnecting", dot: "bg-critical", text: "text-critical" },
 };

@@ -19,6 +19,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -70,6 +71,12 @@ class ComplaintCreate(BaseModel):
     # is anonymous, which counts as a distinct reporter rather than being
     # lumped in with every other anonymous report.
     student_id: str | None = Field(default=None, max_length=255)
+    # Who is filing, as the report form now requires. Optional here and not
+    # in the form: every complaint already in the database predates the
+    # field, and rejecting a payload without it would break both the seed
+    # script and anything already integrated.
+    reporter_name: str | None = Field(default=None, max_length=255)
+    reporter_role: Literal["student", "teacher"] | None = None
 
 
 class ComplaintStatusUpdate(BaseModel):
@@ -83,6 +90,8 @@ class ComplaintRead(BaseModel):
 
     id: uuid.UUID
     student_id: str | None
+    reporter_name: str | None
+    reporter_role: str | None
     raw_description: str
     photo_url: str | None
     photo_matches_text: bool | None
@@ -153,6 +162,8 @@ def _to_read_model(complaint: Complaint) -> ComplaintRead:
     return ComplaintRead(
         id=complaint.id,
         student_id=complaint.student_id,
+        reporter_name=complaint.reporter_name,
+        reporter_role=complaint.reporter_role,
         raw_description=complaint.raw_description,
         photo_url=complaint.photo_url,
         photo_matches_text=complaint.photo_matches_text,
@@ -285,6 +296,8 @@ async def create_complaint(
         location_building=payload.location_building,
         location_room=payload.location_room,
         student_id=payload.student_id,
+        reporter_name=payload.reporter_name,
+        reporter_role=payload.reporter_role,
         photo_url=photo_url,
         image_bytes=image_bytes,
     )

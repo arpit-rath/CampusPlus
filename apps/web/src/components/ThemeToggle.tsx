@@ -132,7 +132,7 @@ export function ThemeToggle({
             className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
               active
                 ? "bg-ink text-paper"
-                : "text-ink/55 hover:bg-ink/10 hover:text-ink"
+                : "text-muted hover:bg-ink/10 hover:text-ink"
             }`}
           >
             <span className="h-4 w-4">{option.icon}</span>

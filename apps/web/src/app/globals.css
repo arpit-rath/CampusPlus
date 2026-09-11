@@ -32,6 +32,16 @@
   --surface: 255 255 255;
   --surface-raised: 255 255 255;
   --ink: 20 24 29;
+  /* Secondary text. Measured, not guessed: 4.67:1 on the page ground and
+     5.31:1 on white. The `ink/40`-to-`ink/50` opacities it replaces measured
+     2.6:1 to 3.3:1 — a whole tier of labels, hints and timestamps that were
+     under the floor. */
+  --ink-muted: 100 108 120;
+
+  /* The select chevron. A select is a replaced element, so it cannot carry a
+     pseudo-element — the arrow has to be a background image, and the colour
+     is baked in per theme because a data URI cannot read currentColor. */
+  --select-chevron: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23646C78' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
 
   --signal: 201 113 31;
   --signal-ink: 163 92 25;
@@ -77,6 +87,10 @@
   --surface: 21 27 35;
   --surface-raised: 27 34 44;
   --ink: 233 237 242;
+  /* 5.92:1 on the raised surface, 7.11:1 on the page ground. */
+  --ink-muted: 150 158 170;
+
+  --select-chevron: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23969EAA' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
 
   /* Lifted so each clears 4.5:1 on the dark ground; the light-mode values
      invert to roughly 2:1 and would be unreadable. */
@@ -113,6 +127,8 @@
     --surface: 21 27 35;
     --surface-raised: 27 34 44;
     --ink: 233 237 242;
+    --ink-muted: 150 158 170;
+    --select-chevron: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23969EAA' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
 
     --signal: 240 161 85;
     --signal-ink: 240 161 85;
@@ -180,6 +196,114 @@ body {
   .bento-card:hover {
     transform: scale(1.02);
     box-shadow: var(--shadow-card-hover);
+  }
+
+  /* -------------------------------------------------------------------------
+     Shared component classes.
+
+     These exist because the same button was being written five slightly
+     different ways — four radii, three heights, two transition durations,
+     and a disabled state that only some of them had. Utility classes are
+     right for layout, which is genuinely per-instance; they are wrong for a
+     component that is supposed to look identical everywhere, because
+     nothing keeps the copies in sync.
+
+     Sizes are deliberate: a control is 44px tall by default, which is the
+     minimum comfortable touch target, and the `-sm` variants are 36px for
+     dense toolbars where a pointer is doing the work.
+  ------------------------------------------------------------------------- */
+
+  .panel {
+    @apply rounded-xl border border-ink/10 bg-surface;
+  }
+
+  .btn {
+    @apply inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg px-4
+           text-sm font-medium transition-colors duration-200 ease-out
+           disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  /* Scale, not colour, on press: the feedback has to read on a fill whose
+     hover state is already a colour change. */
+  .btn:not(:disabled):active {
+    transform: scale(0.97);
+  }
+
+  .btn-primary {
+    @apply bg-signal-fill text-on-signal shadow-card hover:brightness-[1.07];
+  }
+
+  .btn-secondary {
+    @apply border border-ink/20 bg-surface text-ink hover:border-ink/35 hover:bg-ink/5;
+  }
+
+  .btn-ghost {
+    @apply text-muted hover:bg-ink/5 hover:text-ink;
+  }
+
+  .btn-sm {
+    @apply h-9 gap-1.5 rounded-md px-3 text-xs;
+  }
+
+  .input {
+    @apply min-h-[44px] w-full rounded-lg border border-ink/15 bg-surface px-3 py-2.5 text-sm text-ink
+           outline-none transition-colors duration-200 placeholder:text-muted
+           focus:border-signal-ink disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  /* A native select is not laid out like a text input. Chrome insets its
+     text past the CSS padding and paints its own arrow inside the right
+     padding, and its computed font drops the line-height the input keeps —
+     so a select and an input side by side in one grid row (Building next to
+     Room, Reporting as next to Your name) visibly disagree about where text
+     starts, both horizontally and vertically. Dropping the native
+     appearance puts the two on identical metrics. */
+  select.input {
+    @apply appearance-none pr-10 leading-5;
+    background-image: var(--select-chevron);
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 1rem;
+  }
+
+  /* Dense toolbars: filters and page-size pickers sitting inside a panel
+     header, where a 44px control would dominate the row it belongs to. */
+  .input-sm {
+    @apply h-9 min-h-0 rounded-md px-2.5 py-0 text-xs;
+  }
+
+  select.input-sm {
+    @apply pr-7;
+    background-position: right 0.5rem center;
+    background-size: 0.875rem;
+  }
+
+  /* The invalid state is a border *and* an inline message, never colour
+     alone — colour is not information anyone is guaranteed to perceive. */
+  .input[aria-invalid="true"] {
+    @apply border-critical;
+  }
+
+  /* A fieldset's section label, drawn as a plate that sits on the panel's
+     own border rather than as bare text interrupting it. Same border,
+     radius and surface as a secondary button so the page has one vocabulary
+     for "boxed thing", but it keeps the small mono type of a label — making
+     it look exactly like a button would promise a click that does nothing. */
+  .panel-legend {
+    @apply ml-1 rounded-lg border border-ink/15 bg-surface px-3 py-1.5
+           font-mono text-[11px] uppercase tracking-[0.16em] text-muted;
+  }
+
+  .field-label {
+    @apply text-sm font-medium text-ink;
+  }
+
+  .field-hint {
+    @apply text-xs leading-relaxed text-muted;
+  }
+
+  .field-error {
+    @apply text-xs font-medium text-critical;
   }
 }
 
